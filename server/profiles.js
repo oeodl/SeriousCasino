@@ -11,6 +11,21 @@ const DAILY_BONUS = 1000;
 const HISTORY_LIMIT = 50;
 const MAX_PROFILES = 50;
 
+// Schutz gegen Bonus-Farming: Ein frisches Konto bringt den Startbonus (START_BALANCE)
+// gratis mit. Ohne Bremse kann man damit beliebig viele Wegwerf-Konten anlegen, deren
+// Bonus auf ein Hauptkonto schieben (per /api/tip oder Duell-Einsatz) und die Konten
+// wieder löschen – praktisch unbegrenzt. Deshalb darf ein Konto Chips erst dann abgeben,
+// wenn es „etabliert" ist (etwas Mindestalter + ein paar echte Runden gespielt).
+const TRANSFER_MIN_AGE_MS = 24 * 60 * 60 * 1000; // Konto muss mindestens 1 Tag alt sein
+const TRANSFER_MIN_ROUNDS = 25;                  // und 25 echte Spielrunden gespielt haben
+const FRESH_STAKE_MAX = 100;                     // bis dahin: Duell-Einsatz gedeckelt
+const DAILY_TIP_CAP = 25000;                     // und: max. verschenkbar pro Tag
+
+/** Darf dieses Konto Chips abgeben (verschenken / große Duell-Einsätze)? */
+function isEstablished(p) {
+  return Date.now() - (p.createdAt || 0) >= TRANSFER_MIN_AGE_MS && (p.stats?.rounds || 0) >= TRANSFER_MIN_ROUNDS;
+}
+
 const GAME_NAMES = {
   slots: 'Slots',
   blackjack: 'Blackjack',
@@ -268,6 +283,17 @@ function tip(p, toName, amount) {
   const n = Number(amount);
   if (!Number.isInteger(n) || n < 10) throw new GameError('Mindestens 10 Chips.');
   if (n > p.balance) throw new GameError('So viele Chips hast du nicht.');
+  if (!isEstablished(p)) {
+    throw new GameError('Zum Verschenken muss dein Konto mindestens 1 Tag alt sein und 25 Runden gespielt haben.');
+  }
+  // Tageslimit: verhindert, dass viele (auch gealterte) Konten ihren Bonus zusammenschieben.
+  const today = todayLocal();
+  if (p.tipDay !== today) { p.tipDay = today; p.tipSent = 0; }
+  if (p.tipSent + n > DAILY_TIP_CAP) {
+    const left = Math.max(0, DAILY_TIP_CAP - p.tipSent);
+    throw new GameError(`Pro Tag kannst du höchstens ${DAILY_TIP_CAP.toLocaleString('de-DE')} Chips verschenken (heute noch ${left.toLocaleString('de-DE')}).`);
+  }
+  p.tipSent += n;
   p.balance -= n;
   to.balance += n;
   const pr = require('./progress');
@@ -277,7 +303,7 @@ function tip(p, toName, amount) {
 }
 
 module.exports = {
-  START_BALANCE, GAME_NAMES,
+  START_BALANCE, GAME_NAMES, FRESH_STAKE_MAX,
   all, create, get, remove, rename, reset, refill, claimDaily, record, publicView, summary,
-  login, logout, setPassword, tip,
+  login, logout, setPassword, tip, isEstablished,
 };

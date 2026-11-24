@@ -312,6 +312,9 @@ function create(p, body) {
   const stake = Number(body.stake);
   if (!Number.isInteger(stake) || stake < 10) throw new GameError('Einsatz: mindestens 10 Chips.');
   if (stake > p.balance) throw new GameError('Nicht genug Chips für diesen Einsatz.');
+  if (!profiles.isEstablished(p) && stake > profiles.FRESH_STAKE_MAX) {
+    throw new GameError(`Neue Konten können höchstens ${profiles.FRESH_STAKE_MAX} Chips einsetzen. Spiele erst ein paar Runden.`);
+  }
   let to = null;
   if (body.to) {
     const n = String(body.to).trim().toLowerCase();
@@ -336,6 +339,9 @@ function accept(p, body) {
   if (d.from === p.id) throw new GameError('Das ist deine eigene Herausforderung.');
   if (d.to && d.to !== p.id) throw new GameError('Diese Herausforderung gilt jemand anderem.');
   if (d.stake > p.balance) throw new GameError('Nicht genug Chips für diesen Einsatz.');
+  if (!profiles.isEstablished(p) && d.stake > profiles.FRESH_STAKE_MAX) {
+    throw new GameError(`Neue Konten können höchstens ${profiles.FRESH_STAKE_MAX} Chips einsetzen. Spiele erst ein paar Runden.`);
+  }
   p.balance -= d.stake;
   d.to = p.id;
   d.accepted = true;
