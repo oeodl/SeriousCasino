@@ -287,6 +287,11 @@ const adminControl = require('./admincontrol');
 app.get('/api/admin/watch', adminRoute(() => adminControl.list()));
 app.post('/api/admin/luck', adminRoute((b) => adminControl.setLuck(b)));
 app.post('/api/admin/control', adminRoute((b) => adminControl.control(b)));
+const feedback = require('./feedback');
+app.get('/api/admin/feedback', adminRoute(() => feedback.adminList()));
+app.post('/api/admin/feedback/read', adminRoute((b) => feedback.markRead(String(b.id || ''))));
+app.post('/api/admin/feedback/delete', adminRoute((b) => feedback.remove(String(b.id || ''))));
+app.post('/api/feedback', handle((req) => feedback.send(me(req), req.body)));
 
 // ---------- Live: wer ist online, großer-Gewinn-Feed ----------
 app.post('/api/live/ping', handle((req) => {
