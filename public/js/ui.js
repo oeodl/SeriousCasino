@@ -97,20 +97,22 @@ export function confirmDialog(title, text, okLabel = 'OK', danger = false) {
  * Einsatz-Eingabe mit Schnellbuttons ½, 2x, Max.
  * getBalance: Funktion, die das aktuelle Guthaben liefert.
  */
+export const MAX_BET = 1_000_000_000; // wie server/util.js
+
 export function betControl({ game, getBalance, min = 1, initial = 100, label = 'Einsatz' }) {
   const key = `casino.bet.${game}`;
   let start = initial;
   try { start = Number(localStorage.getItem(key)) || initial; } catch { /* egal */ }
   const el = h(`<label class="field">${esc(label)}
     <div class="bet-row">
-      <input class="input" type="number" inputmode="numeric" min="${min}" step="1">
+      <input class="input" type="number" inputmode="numeric" min="${min}" max="${MAX_BET}" step="1">
       <button class="btn btn-sm" type="button" data-a="half">½</button>
       <button class="btn btn-sm" type="button" data-a="double">2×</button>
       <button class="btn btn-sm" type="button" data-a="max">Max</button>
     </div></label>`);
   const input = el.querySelector('input');
   const clamp = (v) => {
-    const bal = Math.max(min, Math.floor(getBalance()));
+    const bal = Math.max(min, Math.min(MAX_BET, Math.floor(getBalance())));
     v = Math.floor(Number(v) || 0);
     return Math.min(Math.max(v, min), bal);
   };

@@ -28,9 +28,16 @@ function randFloat() {
 }
 
 /** Prüft einen Einsatz (ganze Chips, >= min, <= Guthaben) */
+// Höchsteinsatz pro Runde (Summe aller Einzelwetten) – hält Zahlen klein und genau
+const MAX_BET = 1_000_000_000;
+function checkMaxBet(total) {
+  if (total > MAX_BET) throw new GameError(`Höchstens ${MAX_BET.toLocaleString('de-DE')} Chips Einsatz pro Runde.`);
+}
+
 function parseBet(value, profile, min = 1) {
   const n = Number(value);
   if (!Number.isInteger(n) || n < min) throw new GameError(`Einsatz muss eine ganze Zahl ab ${min} sein.`);
+  checkMaxBet(n);
   if (n > profile.balance) throw new GameError('Nicht genug Chips für diesen Einsatz.');
   return n;
 }
@@ -65,6 +72,7 @@ function parseAmounts(body, keys, profile, { allowZeroTotal = false } = {}) {
     total += v;
   }
   if (!allowZeroTotal && total < 1) throw new GameError('Bitte zuerst einen Einsatz setzen.');
+  checkMaxBet(total);
   if (total > profile.balance) throw new GameError('Nicht genug Chips für diese Einsätze.');
   return { amounts, total };
 }
@@ -79,4 +87,4 @@ function safeInterval(name, fn, ms) {
   }, ms);
 }
 
-module.exports = { safeInterval, GameError, randInt, randFloat, shuffle, parseBet, makeDeck, payoutFor, parseAmounts };
+module.exports = { MAX_BET, checkMaxBet, safeInterval, GameError, randInt, randFloat, shuffle, parseBet, makeDeck, payoutFor, parseAmounts };
