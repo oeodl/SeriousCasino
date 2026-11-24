@@ -19,7 +19,21 @@ function fresh() {
 function normalize(d) {
   if (!d || typeof d !== 'object') d = fresh();
   if (!d.profiles || typeof d.profiles !== 'object') d.profiles = {};
+  repairBalances(d);
   return d;
+}
+
+/** Kaputte Guthaben (NaN/Infinity, z. B. nach einem Fehler) auf 0 setzen, statt dass sie sich weiter ausbreiten */
+function repairBalances(d = data) {
+  let fixed = 0;
+  for (const p of Object.values(d?.profiles || {})) {
+    if (p && typeof p === 'object' && !Number.isFinite(p.balance)) {
+      console.warn(`Guthaben von ${p.name} war ungültig (${p.balance}) – auf 0 gesetzt.`);
+      p.balance = 0;
+      fixed++;
+    }
+  }
+  return fixed;
 }
 
 // ---------- Datei ----------
@@ -53,7 +67,11 @@ const fileStore = {
 // ---------- PostgreSQL ----------
 function makePgStore(Pool, connectionString) {
   const local = /@(localhost|127\.0\.0\.1)[:/]/.test(connectionString);
-  const pool = new Pool({ connectionString, ssl: local ? false : { rejectUnauthorized: true }, max: 3, idleTimeoutMillis: 30000 });
+  // Zeitlimits: eine hängende Verbindung darf das Speichern nie dauerhaft blockieren
+  const pool = new Pool({
+    connectionString, ssl: local ? false : { rejectUnauthorized: true }, max: 3, idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 15000, query_timeout: 30000, statement_timeout: 30000,
+  });
   pool.on('error', (e) => console.warn('Datenbank-Verbindung unterbrochen (wird neu aufgebaut):', e.message));
   return {
     name: 'Datenbank',
@@ -112,7 +130,16 @@ function scheduleDbWrite(json) {
 }
 
 async function load() {
-  data = normalize(await store.read());
+  // Die Datenbank kann beim Start kurz nicht erreichbar sein (z. B. Gratis-Datenbank wacht gerade auf) → mehrmals versuchen
+  let raw;
+  for (let attempt = 1; ; attempt++) {
+    try { raw = await store.read(); break; } catch (e) {
+      if (attempt >= 8) throw e;
+      console.warn(`Laden fehlgeschlagen (Versuch ${attempt}/8), neuer Versuch gleich:`, e.message);
+      await new Promise((r) => setTimeout(r, Math.min(15000, 2000 * attempt)));
+    }
+  }
+  data = normalize(raw);
   saveNow();
   await flush();
   return data;
@@ -130,12 +157,19 @@ function save() {
 function saveNow() {
   clearTimeout(saveTimer);
   saveTimer = null;
-  const json = JSON.stringify(data);
+  let json;
+  try { json = JSON.stringify(data); } catch (e) { console.error('Spielstand konnte nicht umgewandelt werden:', e.message); return; }
   if (json === lastSaved) return;
-  lastSaved = json;
   lastSize = json.length;
-  if (store === fileStore) fileStore.writeSync(json);
-  else scheduleDbWrite(json);
+  if (store === fileStore) {
+    try { fileStore.writeSync(json); } catch (e) {
+      // z. B. Festplatte voll: Stand bleibt im Speicher, beim nächsten Mal erneut versuchen
+      console.error('Speichern in Datei fehlgeschlagen:', e.message);
+      saveTimer = setTimeout(saveNow, 5000);
+      return;
+    }
+  } else scheduleDbWrite(json);
+  lastSaved = json;
 }
 
 /** Speichert sofort und wartet, bis alles geschrieben ist (z. B. vor dem Herunterfahren) */
@@ -148,4 +182,4 @@ function get() {
   return data;
 }
 
-module.exports = { savedSize: () => lastSize, load, save, flush, get, FILE, storeName: () => store.name, _makePgStore: makePgStore };
+module.exports = { savedSize: () => lastSize, load, save, flush, get, repairBalances, FILE, storeName: () => store.name, _makePgStore: makePgStore };

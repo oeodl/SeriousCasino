@@ -148,16 +148,35 @@ function noteLoginFail(ip) {
 app.use(express.json({ limit: '50kb' }));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
+// Anfragen, die nur lesen bzw. nichts am Guthaben ändern – dafür lohnt sich keine Sicherungskopie
+const NO_SNAPSHOT = new Set(['/api/live/ping', '/api/chat/send', '/api/feedback', '/api/me/delete', '/api/me/logout', '/api/push/subscribe', '/api/push/unsubscribe', '/api/push/test']);
+const peekMe = (req) => { try { return profiles.get(token(req)); } catch { return null; } };
+function restore(p, snap) {
+  for (const k of Object.keys(p)) if (!(k in snap)) delete p[k];
+  Object.assign(p, snap);
+}
+
+/**
+ * Jede Anfrage läuft wie eine kleine Transaktion: Schlägt sie fehl (oder wäre das Guthaben danach kaputt),
+ * wird das Profil des Spielers auf den Stand davor zurückgesetzt – es gehen nie halb abgezogene Chips verloren.
+ */
 function handle(fn) {
   return (req, res) => {
+    const p = req.method === 'POST' && !NO_SNAPSHOT.has(req.path) ? peekMe(req) : null;
+    let snap = null;
+    try { snap = p ? structuredClone(p) : null; } catch { snap = null; }
     try {
       const result = fn(req, res);
+      if (p && snap && (!Number.isFinite(p.balance) || (p.balance < 0 && snap.balance >= 0))) {
+        throw new Error(`Ungültiges Guthaben nach ${req.path} bei ${p.name}: ${p.balance}`);
+      }
       db.save();
       res.json(result ?? { ok: true });
     } catch (e) {
+      if (p && snap) restore(p, snap);
       if (e instanceof GameError) return res.status(e.status).json({ error: e.message });
-      console.error(e);
-      res.status(500).json({ error: 'Interner Fehler – bitte nochmal versuchen.' });
+      console.error(`[${req.method} ${req.path}]`, e && e.stack || e);
+      if (!res.headersSent) res.status(500).json({ error: 'Interner Fehler – bitte nochmal versuchen.' });
     }
   };
 }
@@ -427,7 +446,7 @@ function withLuck(p, game, run) {
   if (mode === 'normal' || !INSTANT.has(game)) return run();
   const snap = structuredClone({
     balance: p.balance, stats: p.stats, history: p.history, active: p.active,
-    vip: p.vip ?? null, quests: p.quests ?? null, achievements: p.achievements ?? null, weekly: p.weekly ?? null, notices: p.notices ?? [], loseStreak: p.loseStreak ?? 0,
+    vip: p.vip ?? null, quests: p.quests ?? null, achievements: p.achievements ?? null, weekly: p.weekly ?? null, notices: p.notices ?? [], loseStreak: p.loseStreak ?? 0, inventory: p.inventory ?? [],
   });
   live.hold();
   try {
@@ -448,6 +467,13 @@ function withLuck(p, game, run) {
 }
 
 app.use('/api', (req, res) => res.status(404).json({ error: 'Nicht gefunden.' }));
+// Letzte Rettung: z. B. kaputtes JSON im Anfrage-Text → saubere Fehlermeldung statt HTML-Fehlerseite
+app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
+  const status = Number(err?.status || err?.statusCode) || 500;
+  if (status >= 500) console.error(`[${req.method} ${req.path}]`, err && err.stack || err);
+  if (res.headersSent) return;
+  res.status(status).json({ error: status === 413 ? 'Anfrage zu groß.' : status < 500 ? 'Ungültige Anfrage.' : 'Interner Fehler – bitte nochmal versuchen.' });
+});
 
 // Erst die gespeicherten Daten laden (Datei oder Datenbank), dann den Server starten
 ready.then(start, (e) => {
@@ -456,11 +482,12 @@ ready.then(start, (e) => {
 });
 
 function start() {
-livecrash.start();
-liveroulette.start();
-jackpot.start();
-bjtable.start();
-holdem.start();
+// Jedes Live-Spiel einzeln starten: ein Fehler in einem Spiel soll die anderen (und den Server) nicht mitreißen
+for (const [name, mod] of Object.entries({ livecrash, liveroulette, jackpot, bjtable, holdem })) {
+  try { mod.start(); } catch (e) { console.error(`Live-Spiel ${name} konnte nicht starten:`, e && e.stack || e); }
+}
+// Regelmäßig kaputte Guthaben reparieren (falls irgendwo doch NaN entsteht)
+require('./util').safeInterval('repair', () => { if (db.repairBalances()) db.save(); }, 60000);
 const server = app.listen(PORT, HOST, () => {
   console.log('');
   console.log('  ==========================================');
