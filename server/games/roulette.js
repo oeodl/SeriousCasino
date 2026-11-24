@@ -1,6 +1,6 @@
 // Europäisches Roulette (0–36, eine Null). Auszahlungen wie im Casino:
 // Zahl 35:1, Dutzend/Kolonne 2:1, Farbe/Gerade/Ungerade/1–18/19–36 1:1.
-const { randInt, GameError } = require('../util');
+const { randInt, GameError, checkMaxBet } = require('../util');
 const profiles = require('../profiles');
 
 const RED = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
@@ -43,6 +43,7 @@ function validate(bets) {
 function spin(p, body) {
   const bets = validate(body.bets);
   const total = bets.reduce((a, b) => a + b.amount, 0);
+  checkMaxBet(total);
   if (total > p.balance) throw new GameError('Nicht genug Chips für diese Einsätze.');
   p.balance -= total;
 

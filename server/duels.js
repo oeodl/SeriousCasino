@@ -5,7 +5,7 @@
 const crypto = require('crypto');
 const db = require('./db');
 const profiles = require('./profiles');
-const { randInt, shuffle, GameError } = require('./util');
+const { randInt, shuffle, GameError, checkMaxBet } = require('./util');
 
 const GAMES = {
   reaction: 'Reaktionstest',
@@ -311,6 +311,7 @@ function create(p, body) {
   if (!Object.hasOwn(GAMES, game)) throw new GameError('Bitte ein Duell-Spiel wählen.');
   const stake = Number(body.stake);
   if (!Number.isInteger(stake) || stake < 10) throw new GameError('Einsatz: mindestens 10 Chips.');
+  checkMaxBet(stake);
   if (stake > p.balance) throw new GameError('Nicht genug Chips für diesen Einsatz.');
   let to = null;
   if (body.to) {

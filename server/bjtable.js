@@ -4,7 +4,7 @@
 const crypto = require('crypto');
 const db = require('./db');
 const profiles = require('./profiles');
-const { makeDeck, GameError } = require('./util');
+const { makeDeck, GameError, checkMaxBet } = require('./util');
 
 const SEATS = 5, BET_MS = 15000, TURN_MS = 20000, DEALER_STEP_MS = 900, RESULT_MS = 6000;
 const val = (c) => (c.r === 14 ? 11 : c.r >= 10 ? 10 : c.r);
@@ -149,6 +149,7 @@ function bet(p, body) {
   if (!s) { sit(p, {}); s = T.seats.find((x) => x && x.pid === p.id); }
   const amount = Number(body.amount);
   if (!Number.isInteger(amount) || amount < 1) throw new GameError('Ungültiger Einsatz.');
+  checkMaxBet(s.bet + amount);
   if (amount > p.balance) throw new GameError('Nicht genug Chips.');
   p.balance -= amount;
   s.bet += amount;

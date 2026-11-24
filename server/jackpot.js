@@ -4,7 +4,7 @@
 const crypto = require('crypto');
 const db = require('./db');
 const profiles = require('./profiles');
-const { randInt, GameError } = require('./util');
+const { randInt, GameError, checkMaxBet } = require('./util');
 
 const COUNTDOWN_MS = 30000, DRAW_MS = 6000, RESULT_MS = 6000, MIN_DEPOSIT = 10;
 let round = null;
@@ -92,6 +92,7 @@ function deposit(p, body) {
   if (round.phase !== 'open') throw new GameError('Die Ziehung läuft – gleich startet ein neuer Topf.');
   const amount = Number(body.amount);
   if (!Number.isInteger(amount) || amount < MIN_DEPOSIT) throw new GameError(`Mindestens ${MIN_DEPOSIT} Chips.`);
+  checkMaxBet(amount + (round.entries.find((x) => x.pid === p.id)?.amount || 0));
   if (amount > p.balance) throw new GameError('Nicht genug Chips.');
   p.balance -= amount;
   let e = round.entries.find((x) => x.pid === p.id);

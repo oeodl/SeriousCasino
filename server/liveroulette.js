@@ -3,7 +3,7 @@
 const crypto = require('crypto');
 const db = require('./db');
 const profiles = require('./profiles');
-const { randInt, GameError } = require('./util');
+const { randInt, GameError, checkMaxBet } = require('./util');
 const { TYPES, colorOf } = require('./games/roulette')._internal;
 
 const BET_MS = 15000, SPIN_MS = 6000, RESULT_MS = 5000;
@@ -94,6 +94,7 @@ function bet(p, body) {
     return { type, value, amount };
   });
   const total = clean.reduce((a, b) => a + b.amount, 0);
+  checkMaxBet(total + (round.bets.get(p.id)?.total || 0));
   if (total > p.balance) throw new GameError('Nicht genug Chips.');
   p.balance -= total;
   const cur = round.bets.get(p.id) || { pid: p.id, name: p.name, list: [], total: 0, payout: null };
