@@ -207,11 +207,36 @@ function refill(p) {
   return REFILL_AMOUNT;
 }
 
+// ---------- Tagesbonus mit Serie: jeden Tag in Folge etwas mehr (ab Tag 7 bleibt es beim Höchstwert) ----------
+const STREAK_STEP = 500;
+const STREAK_MAX_DAY = 7;
+const dailyAmount = (day) => DAILY_BONUS + STREAK_STEP * (Math.min(day, STREAK_MAX_DAY) - 1);
+function yesterdayLocal() {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return d.toLocaleDateString('sv-SE');
+}
+/** Serie, wie sie mit dem nächsten Abholen weiterläuft (verpasster Tag → wieder Tag 1) */
+function dailyInfo(p) {
+  const claimedToday = p.lastDaily === todayLocal();
+  const alive = claimedToday || p.lastDaily === yesterdayLocal();
+  const streak = alive ? p.dailyStreak || 1 : 0; // bisher geschaffte Tage in Folge
+  const nextDay = streak + 1; // Tag, der mit dem nächsten Abholen erreicht wird
+  return {
+    available: !claimedToday, streak, nextDay, maxDay: STREAK_MAX_DAY,
+    days: Array.from({ length: STREAK_MAX_DAY }, (_, i) => dailyAmount(i + 1)),
+    amount: dailyAmount(claimedToday ? streak : nextDay), // heute (noch) zu holen bzw. heute geholt
+    tomorrow: dailyAmount(claimedToday ? nextDay : nextDay + 1), // morgen, wenn die Serie hält
+  };
+}
 function claimDaily(p) {
-  if (p.lastDaily === todayLocal()) throw new GameError('Den Tagesbonus hast du heute schon abgeholt.');
+  const info = dailyInfo(p);
+  if (!info.available) throw new GameError('Den Tagesbonus hast du heute schon abgeholt.');
   p.lastDaily = todayLocal();
-  p.balance += DAILY_BONUS;
-  return DAILY_BONUS;
+  p.dailyStreak = info.nextDay;
+  p.balance += info.amount;
+  if (info.nextDay % 7 === 0) require('./chat').system(`🔥 ${p.name} holt sich seit ${info.nextDay} Tagen jeden Tag den Bonus ab!`);
+  return info.amount;
 }
 
 /** Bucht eine abgeschlossene Runde in Statistik und Verlauf. */
@@ -243,7 +268,7 @@ function publicView(p) {
     createdAt: p.createdAt,
     hasPassword: !!p.passwordHash,
     refill: refillInfo(p),
-    daily: { available: p.lastDaily !== todayLocal(), amount: DAILY_BONUS },
+    daily: dailyInfo(p),
   };
 }
 
@@ -278,6 +303,6 @@ function tip(p, toName, amount) {
 
 module.exports = {
   START_BALANCE, GAME_NAMES,
-  all, create, get, remove, rename, reset, refill, claimDaily, record, publicView, summary,
+  all, create, get, remove, rename, reset, refill, claimDaily, dailyInfo, record, publicView, summary,
   login, logout, setPassword, tip,
 };

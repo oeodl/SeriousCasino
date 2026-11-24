@@ -211,7 +211,9 @@ function updateBanner() {
   if (!me) return banner.classList.add('hidden');
   const parts = [];
   if (me.daily?.available) {
-    parts.push(`<span>🎁 Dein Tagesbonus wartet: <b class="gold">+${fmt(me.daily.amount)} Chips</b></span>
+    const d = me.daily;
+    const serie = d.nextDay > 1 ? ` · 🔥 Tag ${d.nextDay} in Folge` : '';
+    parts.push(`<span>🎁 Dein Tagesbonus wartet: <b class="gold">+${fmt(d.amount)} Chips</b>${serie}</span>
       <button class="btn btn-gold btn-sm" data-act="daily">Abholen</button>`);
   }
   if (state.balance < (me.refill?.threshold ?? 100)) {
@@ -361,7 +363,7 @@ async function pollDuels() {
         // Hinweise: Aufstieg, Aufgaben, Erfolge, Geschenke
         if (l.notices?.length) {
           for (const n of l.notices) toast(n.text, 'ok');
-          if (l.notices.some((n) => n.type === 'level' || n.type === 'weekly')) { sfx.bigWin(); confetti(); } else sfx.coin();
+          if (l.notices.some((n) => ['level', 'weekly', 'chest'].includes(n.type))) { sfx.bigWin(); confetti(); } else sfx.coin();
           setBalance(l.balance);
         }
       }).catch(() => {});
