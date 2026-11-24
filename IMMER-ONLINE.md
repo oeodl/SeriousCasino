@@ -8,9 +8,7 @@ So läuft das Casino rund um die Uhr unter einem github.io-Link – kostenlos:
 
 Deine Freunde brauchen **nur den Link** – kein Konto. Passwörter sind Pflicht.
 
-> ⏳ Gratis-Server schlafen nach 15 Minuten ohne Besucher ein. Damit das nicht passiert, ruft ein kleiner Helfer auf GitHub (**Actions → „Server wach halten“**) den Server alle 10 Minuten auf. GitHub startet solche Zeitpläne manchmal mit Verspätung – falls der Server doch schläft, dauert der erste Aufruf bis zu **1 Minute**; die Seite zeigt dann „Der Server wacht auf …“ und lädt von selbst weiter.
->
-> Render schenkt 750 Server-Stunden pro Monat – das reicht für **einen** Server rund um die Uhr. Hast du dort noch andere Gratis-Dienste, schalte den Helfer lieber ab (Actions → „Server wach halten“ → „…“ → *Disable workflow*). GitHub pausiert ihn außerdem von selbst, wenn 60 Tage lang nichts am Projekt geändert wurde; dann dort einfach wieder *Enable* klicken.
+> ⏳ Gratis-Server schlafen nach 15 Minuten ohne Besucher ein. Der erste Aufruf danach dauert bis zu **1 Minute**; die Seite zeigt dann „Der Server wacht auf …“ und lädt von selbst weiter.
 
 Die Einrichtung machst du **einmal** (ca. 15 Minuten). Danach geht jede Änderung, die auf GitHub hochgeladen wird, automatisch online.
 
