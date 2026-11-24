@@ -137,18 +137,30 @@ function sell(p, body) {
 }
 
 // ---------- Solo öffnen ----------
+const MAX_OPEN = 10; // so viele Cases auf einmal
+
 function open(p, body) {
   const c = byId[body.caseId];
   if (!c) throw new GameError('Unbekanntes Case.');
-  if (inv(p).length >= INV_MAX) throw new GameError(`Dein Inventar ist voll (${INV_MAX} Skins). Verkauf erst ein paar.`);
-  if (p.balance < c.price) throw new GameError('Nicht genug Chips.');
-  p.balance -= c.price;
-  const d = drop(c, roll(c));
-  inv(p).push(d);
-  const v = dropView(d);
-  profiles.record(p, 'caseopen', c.price, v.value, `${c.name}: ${fullName(v)} [${RARITY[v.rarity].name}]`);
-  if (v.rarity === 'mythic' || v.value >= c.price * 10) require('./chat').system(`📦 ${p.name} zieht ${fullName(v)} aus dem ${c.name} (${v.value.toLocaleString('de-DE')} Chips)!`);
-  return { item: v, caseId: c.id, price: c.price, invCount: inv(p).length };
+  const count = body.count === undefined ? 1 : Number(body.count);
+  if (!Number.isInteger(count) || count < 1 || count > MAX_OPEN) throw new GameError(`Du kannst 1 bis ${MAX_OPEN} Cases auf einmal öffnen.`);
+  const free = INV_MAX - inv(p).length;
+  if (free < count) throw new GameError(free > 0 ? `Im Inventar ist nur noch Platz für ${free} Skin${free === 1 ? '' : 's'}. Verkauf erst ein paar.` : `Dein Inventar ist voll (${INV_MAX} Skins). Verkauf erst ein paar.`);
+  const price = c.price * count;
+  if (p.balance < price) throw new GameError(count > 1 ? `Nicht genug Chips für ${count} Cases (${price.toLocaleString('de-DE')}).` : 'Nicht genug Chips.');
+  p.balance -= price;
+  const items = [];
+  for (let k = 0; k < count; k++) {
+    const d = drop(c, roll(c));
+    inv(p).push(d);
+    const v = dropView(d);
+    items.push(v);
+    profiles.record(p, 'caseopen', c.price, v.value, `${c.name}: ${fullName(v)} [${RARITY[v.rarity].name}]`);
+    if (v.rarity === 'mythic' || v.value >= c.price * 10) require('./chat').system(`📦 ${p.name} zieht ${fullName(v)} aus dem ${c.name} (${v.value.toLocaleString('de-DE')} Chips)!`);
+  }
+  const payout = items.reduce((a, x) => a + x.value, 0);
+  // price/payout = Summe aller Cases (für die Admin-Glückssteuerung); item = erster Skin (ältere Oberfläche)
+  return { items, item: items[0], count, caseId: c.id, price, payout, invCount: inv(p).length };
 }
 
 // ---------- Battles ----------
