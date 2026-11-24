@@ -58,7 +58,7 @@ function pickWeighted(items) {
 }
 
 /** Lässt einen Streifen voller Skins laufen und hält beim Ziel an (axis 'x' = waagerecht, 'y' = senkrecht) */
-function spin(box, caseObj, rarities, target, { duration = 4200, axis = 'x' } = {}) {
+function spin(box, caseObj, rarities, target, { duration = 4200, axis = 'x', sound = true } = {}) {
   return new Promise((resolve) => {
     const N = 42, T = 36;
     const items = Array.from({ length: N }, (_, i) => (i === T ? target : pickWeighted(caseObj.items)));
@@ -81,7 +81,7 @@ function spin(box, caseObj, rarities, target, { duration = 4200, axis = 'x' } = 
       if (k >= 1) return;
       const e = 1 - Math.pow(1 - k, 3.2);
       const idx = Math.floor((e * dist) / (axis === 'x' ? card.offsetWidth + 6 : card.offsetHeight + 6));
-      if (idx !== last) { last = idx; sfx.tick(); }
+      if (idx !== last) { last = idx; if (sound) sfx.tick(); }
       requestAnimationFrame(step);
     };
     requestAnimationFrame(step);
@@ -89,7 +89,7 @@ function spin(box, caseObj, rarities, target, { duration = 4200, axis = 'x' } = 
       track.style.transition = 'transform .35s ease-out';
       track.style.transform = axis === 'x' ? `translateX(${-(pos - boxSize / 2)}px)` : `translateY(${-(pos - boxSize / 2)}px)`;
       card.classList.add('landed');
-      sfx.reelStop();
+      if (sound) sfx.reelStop();
       setTimeout(resolve, 380);
     }, duration + 50);
   });
@@ -137,48 +137,89 @@ export async function cases(root, ctx) {
   }
 
   // ---------- Öffnen ----------
+  let openCount = 1;
+  try { openCount = Math.min(10, Math.max(1, Number(localStorage.getItem('casino.cases.count')) || 1)); } catch { /* egal */ }
+
   function paintOpen() {
     const c = caseById(sel);
     body.innerHTML = `<div class="panel">
-      <div class="reel-box solo"></div>
+      <div class="reels"></div>
       <div class="result-msg"></div>
-      <div class="row" style="justify-content:center"><button class="btn btn-gold btn-big open-btn" style="max-width:360px">${esc(c.name)} öffnen – ${fmt(c.price)}</button></div>
+      <div class="open-count"><span class="muted">Anzahl:</span><div class="count-seg"></div></div>
+      <div class="row" style="justify-content:center"><button class="btn btn-gold btn-big open-btn" style="max-width:420px"></button></div>
       ${contents(c)}</div>`;
-    const box = body.querySelector('.reel-box');
-    box.innerHTML = `<div class="reel-track x">${c.items.slice(0, 8).map((it) => itemCard(it, info.rarities)).join('')}</div><div class="reel-marker x"></div>`;
-    body.querySelector('.open-btn').addEventListener('click', async () => {
+    const reels = body.querySelector('.reels');
+    const btn = body.querySelector('.open-btn');
+    const msg = body.querySelector('.result-msg');
+    const label = () => { btn.textContent = `${openCount > 1 ? `${openCount}× ` : ''}${c.name} öffnen – ${fmt(c.price * openCount)}`; };
+    // Walzen aufbauen: 1 Case = waagerecht, mehrere = senkrechte Walzen nebeneinander (wie bei CS2)
+    const buildReels = () => {
+      const multi = openCount > 1;
+      reels.className = `reels ${multi ? 'multi' : ''}`;
+      reels.style.setProperty('--n', Math.min(openCount, 5));
+      reels.innerHTML = Array.from({ length: openCount }, () => `<div class="reel-box ${multi ? 'vertical multi' : 'solo'}"></div>`).join('');
+      reels.querySelectorAll('.reel-box').forEach((box) => {
+        const axis = multi ? 'y' : 'x';
+        box.innerHTML = `<div class="reel-track ${axis}">${c.items.slice(0, 8).map((it) => itemCard(it, info.rarities)).join('')}</div><div class="reel-marker ${axis}"></div>`;
+      });
+    };
+    const seg = segmented(Array.from({ length: 10 }, (_, i) => ({ value: i + 1, label: String(i + 1) })), openCount, (v) => {
+      if (busy) return;
+      openCount = v;
+      try { localStorage.setItem('casino.cases.count', v); } catch { /* egal */ }
+      label(); buildReels(); msg.className = 'result-msg'; msg.innerHTML = '';
+    });
+    body.querySelector('.count-seg').appendChild(seg.el);
+    label(); buildReels();
+
+    btn.addEventListener('click', async () => {
       if (busy) return;
       busy = true;
-      const btn = body.querySelector('.open-btn');
       btn.disabled = true;
-      const msg = body.querySelector('.result-msg');
+      seg.setDisabled(true);
       msg.className = 'result-msg';
       msg.textContent = '';
       try {
-        const r = await ctx.post('/api/cases/open', { caseId: c.id });
+        const r = await ctx.post('/api/cases/open', { caseId: c.id, count: openCount });
         ctx.setBalance(r.balance);
         setInvCount(r.invCount);
-        await spin(box, c, info.rarities, r.item);
+        const items = r.items || [r.item];
+        if (items.length !== reels.children.length) { openCount = items.length; buildReels(); }
+        const boxes = [...reels.querySelectorAll('.reel-box')];
+        const multi = items.length > 1;
+        // leicht versetzt anhalten lassen, damit es spannender wirkt
+        await Promise.all(items.map((it, k) => spin(boxes[k], c, info.rarities, it, multi ? { axis: 'y', duration: 3600 + k * 180, sound: k === items.length - 1 } : {})));
         if (!alive) return;
-        const it = r.item, rar = info.rarities[it.rarity];
-        const net = it.value - c.price;
+        const total = items.reduce((a, x) => a + x.value, 0);
+        const net = total - r.price;
+        const best = items.reduce((a, x) => (x.value > a.value ? x : a), items[0]);
         msg.className = 'result-msg drop-msg ' + (net > 0 ? 'win' : 'lose');
-        msg.innerHTML = `<div class="drop-name" style="color:${rar.color}">${it.st ? '<span class="skin-st">StatTrak™</span> ' : ''}${esc(it.weapon)} | ${esc(it.finish)}</div>
-          <div class="drop-sub"><span style="color:${rar.color}">${esc(rar.name)}</span> · ${esc(it.wearName)} · Float ${it.float.toFixed(4)} · <b class="gold">${fmt(it.value)} Chips</b></div>
-          <div class="row" style="justify-content:center;gap:8px;margin-top:8px"><button class="btn btn-sm btn-green sell-now">Verkaufen (+${fmt(it.value)})</button><button class="btn btn-sm keep-now">🎒 Behalten</button></div>`;
-        msg.querySelector('.sell-now').addEventListener('click', async (e) => {
+        if (!multi) {
+          const it = items[0], rar = info.rarities[it.rarity];
+          msg.innerHTML = `<div class="drop-name" style="color:${rar.color}">${it.st ? '<span class="skin-st">StatTrak™</span> ' : ''}${esc(it.weapon)} | ${esc(it.finish)}</div>
+            <div class="drop-sub"><span style="color:${rar.color}">${esc(rar.name)}</span> · ${esc(it.wearName)} · Float ${it.float.toFixed(4)} · <b class="gold">${fmt(it.value)} Chips</b></div>`;
+        } else {
+          const rar = info.rarities[best.rarity];
+          msg.innerHTML = `<div class="drop-name">${items.length} Skins im Wert von <span class="gold">${fmt(total)}</span> Chips <span class="${net >= 0 ? 'pos' : 'neg'}" style="font-size:.9rem">(${net >= 0 ? '+' : '−'}${fmt(Math.abs(net))})</span></div>
+            <div class="drop-sub">Bester Zug: <span style="color:${rar.color}">${best.st ? 'StatTrak™ ' : ''}${esc(best.weapon)} | ${esc(best.finish)}</span> · ${esc(best.wearName)} · <b class="gold">${fmt(best.value)}</b></div>`;
+        }
+        msg.insertAdjacentHTML('beforeend', `<div class="row drop-actions" style="justify-content:center;gap:8px;margin-top:8px">
+          <button class="btn btn-sm btn-green sell-now">${multi ? 'Alle verkaufen' : 'Verkaufen'} (+${fmt(total)})</button><button class="btn btn-sm keep-now">🎒 Behalten</button></div>`);
+        const actions = msg.querySelector('.drop-actions');
+        actions.querySelector('.sell-now').addEventListener('click', async (e) => {
           e.target.disabled = true;
           try {
-            const s2 = await ctx.post('/api/cases/sell', { ids: [it.id] });
+            const s2 = await ctx.post('/api/cases/sell', { ids: items.map((x) => x.id) });
             ctx.setBalance(s2.balance); setInvCount(s2.count); sfx.coin();
-            msg.querySelector('.row').innerHTML = `<span class="pos">Verkauft: +${fmt(s2.amount)} Chips</span>`;
+            actions.innerHTML = `<span class="pos">Verkauft: +${fmt(s2.amount)} Chips</span>`;
           } catch (err) { toast(err.message, 'err'); e.target.disabled = false; }
         });
-        msg.querySelector('.keep-now').addEventListener('click', () => { msg.querySelector('.row').innerHTML = '<span class="muted">Liegt in deinem Inventar 🎒</span>'; });
-        if (net > 0) celebrate(it.value, c.price); else sfx.lose();
+        actions.querySelector('.keep-now').addEventListener('click', () => { actions.innerHTML = '<span class="muted">Liegt in deinem Inventar 🎒</span>'; });
+        if (net > 0) celebrate(total, r.price); else sfx.lose();
       } catch (e) { toast(e.message, 'err'); }
       busy = false;
       btn.disabled = false;
+      seg.setDisabled(false);
     });
   }
 

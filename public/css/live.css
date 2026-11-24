@@ -174,3 +174,17 @@
 }
 @media (max-width: 860px) { .live-grid { grid-template-columns: 1fr; } }
 @media (max-width: 600px) { .bt-cols { grid-template-columns: repeat(var(--n, 2), minmax(130px, 1fr)); } .skin { width: 100px; height: 112px; } .reel-track.y { margin-left: -50px; } }
+
+/* Mehrere Cases auf einmal: senkrechte Walzen nebeneinander (max. 5 pro Reihe) */
+.open-count { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; margin: 6px 0 12px; }
+.open-count .seg { flex-wrap: wrap; justify-content: center; }
+.reels.multi { display: grid; grid-template-columns: repeat(var(--n, 5), minmax(0, 1fr)); gap: 6px; margin-bottom: 14px; }
+.reel-box.vertical.multi { height: 230px; }
+.reels.multi .skin { width: 104px; height: 112px; }
+.reels.multi .reel-track.y { margin-left: -52px; }
+@media (max-width: 600px) {
+  .reels.multi { grid-template-columns: repeat(min(var(--n, 5), 3), minmax(0, 1fr)); }
+  .reel-box.vertical.multi { height: 190px; }
+  .reels.multi .skin { width: 92px; height: 104px; }
+  .reels.multi .reel-track.y { margin-left: -46px; }
+}
