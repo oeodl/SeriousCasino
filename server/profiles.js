@@ -182,6 +182,7 @@ function reset(p) {
   p.lastRefill = 0;
   p.weekly = null; // Wochenwertung neu (Stufen und Erfolge bleiben erhalten)
   p.loseStreak = 0;
+  p.inventory = []; // Skins aus Cases
 }
 
 function refillInfo(p) {

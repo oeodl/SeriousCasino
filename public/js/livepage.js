@@ -1,7 +1,8 @@
 // Live-Bereich (wer spielt gerade wo + große Gewinne), Cases öffnen und Case Battles.
-import { h, esc, fmt, sleep, toast, celebrate, confetti, segmented } from './ui.js';
+import { h, esc, fmt, sleep, toast, celebrate, confetti, segmented, confirmDialog } from './ui.js';
 import { sfx } from './sound.js';
 import { GAMES } from './app.js';
+import { skinCard, caseArt } from './skins.js';
 
 const PAGE_NAMES = { home: 'Startseite', live: 'Live', duels: 'Duelle', duel: 'Duell', cases: 'Cases', battle: 'Case Battle', stats: 'Statistik', leaderboard: 'Rangliste', settings: 'Einstellungen', admin: 'Admin' };
 const whereName = (w) => GAMES.find((g) => g.id === w)?.name || PAGE_NAMES[w] || w;
@@ -48,11 +49,7 @@ export async function live(root, ctx) {
 let INFO = null;
 async function caseInfo(ctx) { if (!INFO) INFO = await ctx.post('/api/cases/info'); return INFO; }
 
-function itemCard(it, rarities, cls = '') {
-  const r = rarities[it.rarity];
-  return `<div class="skin ${cls}" style="--rc:${r.color}"><span class="skin-icon">${it.icon}</span>
-    <span class="skin-name">${esc(it.weapon)}</span><span class="skin-finish">${esc(it.finish)}</span><span class="skin-val">${fmt(it.value)}</span></div>`;
-}
+const itemCard = (it, rarities, cls = '') => skinCard(it, rarities, cls);
 
 function pickWeighted(items) {
   let r = Math.random();
@@ -101,14 +98,14 @@ function spin(box, caseObj, rarities, target, { duration = 4200, axis = 'x' } = 
 // ===================== Cases (Öffnen + Battles) =====================
 export async function cases(root, ctx) {
   const info = await caseInfo(ctx);
-  let alive = true, timer = 0, tab = 'battles', sel = info.cases[0].id, busy = false;
-  try { tab = localStorage.getItem('casino.cases.tab') || 'battles'; sel = localStorage.getItem('casino.cases.sel') || sel; } catch { /* egal */ }
+  let alive = true, timer = 0, tab = 'open', sel = info.cases[0].id, busy = false;
+  try { tab = localStorage.getItem('casino.cases.tab') || 'open'; sel = localStorage.getItem('casino.cases.sel') || sel; } catch { /* egal */ }
   if (!info.cases.some((c) => c.id === sel)) sel = info.cases[0].id;
   const caseById = (id) => info.cases.find((c) => c.id === id);
 
   const el = h(`<div>
     <div class="page-head"><h1>📦 Cases</h1></div>
-    <div class="tab-row"><button class="btn" data-t="battles">⚔️ Case Battles</button><button class="btn" data-t="open">📦 Case öffnen</button></div>
+    <div class="tab-row"><button class="btn" data-t="open">📦 Case öffnen</button><button class="btn" data-t="battles">⚔️ Case Battles</button><button class="btn" data-t="inventory">🎒 Inventar <span class="inv-count muted"></span></button></div>
     <div class="case-picker"></div>
     <div class="cases-body"></div></div>`);
   root.appendChild(el);
@@ -116,8 +113,14 @@ export async function cases(root, ctx) {
   const body = el.querySelector('.cases-body');
 
   function paintPicker() {
-    picker.innerHTML = info.cases.map((c) => `<button class="case-box ${c.id === sel ? 'on' : ''}" data-c="${c.id}" style="--cc:${c.color}">
-      <span class="case-ico">📦</span><b>${esc(c.name)}</b><span class="gold">${fmt(c.price)}</span></button>`).join('');
+    picker.classList.toggle('hidden', tab === 'inventory');
+    const box = (c) => `<button class="case-box ${c.id === sel ? 'on' : ''}" data-c="${c.id}" style="--cc:${c.color}">
+      <span class="case-ico">${caseArt(c.color)}</span><b>${esc(c.name)}</b><span class="gold">${fmt(c.price)}</span></button>`;
+    const group = (tier, title) => {
+      const list = info.cases.filter((c) => (c.tier || 'standard') === tier);
+      return list.length ? `<div class="case-group ${tier}"><h3>${title}</h3><div class="case-grid">${list.map(box).join('')}</div></div>` : '';
+    };
+    picker.innerHTML = group('standard', '📦 Standard-Cases') + group('highroller', '💎 High Roller – für die ganz großen Ziehungen');
     picker.querySelectorAll('[data-c]').forEach((b) => b.addEventListener('click', () => {
       if (busy) return;
       sel = b.dataset.c;
@@ -153,14 +156,26 @@ export async function cases(root, ctx) {
       msg.textContent = '';
       try {
         const r = await ctx.post('/api/cases/open', { caseId: c.id });
-        ctx.setBalance(r.balance - r.item.value);
+        ctx.setBalance(r.balance);
+        setInvCount(r.invCount);
         await spin(box, c, info.rarities, r.item);
         if (!alive) return;
-        ctx.setBalance(r.balance);
-        const net = r.item.value - c.price;
-        msg.className = 'result-msg ' + (net > 0 ? 'win' : 'lose');
-        msg.innerHTML = `${esc(r.item.weapon)} | ${esc(r.item.finish)} <span style="color:${info.rarities[r.item.rarity].color}">(${esc(info.rarities[r.item.rarity].name)})</span> – ${fmt(r.item.value)} Chips`;
-        if (net > 0) celebrate(r.item.value, c.price); else sfx.lose();
+        const it = r.item, rar = info.rarities[it.rarity];
+        const net = it.value - c.price;
+        msg.className = 'result-msg drop-msg ' + (net > 0 ? 'win' : 'lose');
+        msg.innerHTML = `<div class="drop-name" style="color:${rar.color}">${it.st ? '<span class="skin-st">StatTrak™</span> ' : ''}${esc(it.weapon)} | ${esc(it.finish)}</div>
+          <div class="drop-sub"><span style="color:${rar.color}">${esc(rar.name)}</span> · ${esc(it.wearName)} · Float ${it.float.toFixed(4)} · <b class="gold">${fmt(it.value)} Chips</b></div>
+          <div class="row" style="justify-content:center;gap:8px;margin-top:8px"><button class="btn btn-sm btn-green sell-now">Verkaufen (+${fmt(it.value)})</button><button class="btn btn-sm keep-now">🎒 Behalten</button></div>`;
+        msg.querySelector('.sell-now').addEventListener('click', async (e) => {
+          e.target.disabled = true;
+          try {
+            const s2 = await ctx.post('/api/cases/sell', { ids: [it.id] });
+            ctx.setBalance(s2.balance); setInvCount(s2.count); sfx.coin();
+            msg.querySelector('.row').innerHTML = `<span class="pos">Verkauft: +${fmt(s2.amount)} Chips</span>`;
+          } catch (err) { toast(err.message, 'err'); e.target.disabled = false; }
+        });
+        msg.querySelector('.keep-now').addEventListener('click', () => { msg.querySelector('.row').innerHTML = '<span class="muted">Liegt in deinem Inventar 🎒</span>'; });
+        if (net > 0) celebrate(it.value, c.price); else sfx.lose();
       } catch (e) { toast(e.message, 'err'); }
       busy = false;
       btn.disabled = false;
@@ -229,9 +244,76 @@ export async function cases(root, ctx) {
     timer = setTimeout(refreshBattles, 3000);
   }
 
+  // ---------- Inventar ----------
+  function setInvCount(n) { el.querySelector('.inv-count').textContent = n ? `(${n})` : ''; }
+  let invSort = 'new';
+  try { invSort = localStorage.getItem('casino.inv.sort') || 'new'; } catch { /* egal */ }
+  const RAR_ORDER = ['mythic', 'legendary', 'epic', 'rare', 'common'];
+  async function paintInventory() {
+    body.innerHTML = '<div class="panel"><p class="muted">Lade Inventar …</p></div>';
+    let inv;
+    try { inv = await ctx.post('/api/cases/inventory'); } catch (e) { body.innerHTML = `<div class="panel"><p class="neg">${esc(e.message)}</p></div>`; return; }
+    if (!alive || tab !== 'inventory') return;
+    setInvCount(inv.count);
+    const selected = new Set();
+    const sorted = () => {
+      const a = [...inv.items];
+      if (invSort === 'value') a.sort((x, y) => y.value - x.value);
+      else if (invSort === 'rarity') a.sort((x, y) => RAR_ORDER.indexOf(x.rarity) - RAR_ORDER.indexOf(y.rarity) || y.value - x.value);
+      return a;
+    };
+    body.innerHTML = `<div class="panel inv-panel">
+      <div class="inv-head">
+        <div><h2 style="margin:0">🎒 Inventar</h2><span class="muted">${fmt(inv.count)} / ${fmt(inv.max)} Skins · Gesamtwert <b class="gold">${fmt(inv.total)}</b> Chips</span></div>
+        <div class="row" style="gap:8px;flex-wrap:wrap">
+          <select class="input inv-sort" style="width:auto"><option value="new">Neueste zuerst</option><option value="value">Wertvollste zuerst</option><option value="rarity">Nach Seltenheit</option></select>
+          <button class="btn btn-green sell-sel" disabled>Auswahl verkaufen</button>
+          <button class="btn btn-ghost sell-all" ${inv.count ? '' : 'disabled'}>Alles verkaufen</button>
+        </div>
+      </div>
+      <p class="muted" style="margin:6px 0 12px;font-size:.85rem">Tippe Skins an, um sie auszuwählen. Verkauft wird zum angezeigten Wert.</p>
+      <div class="skin-grid inv-grid"></div></div>`;
+    const grid = body.querySelector('.inv-grid');
+    const sellSel = body.querySelector('.sell-sel');
+    const paintGrid = () => {
+      grid.innerHTML = inv.items.length ? sorted().map((it) => skinCard(it, info.rarities, selected.has(it.id) ? 'inv on' : 'inv', `data-id="${esc(it.id)}" title="${esc(it.caseName)} · ${esc(it.wearName)} · Float ${it.float.toFixed(4)}"`)).join('')
+        : '<p class="muted">Noch leer – öffne ein Case!</p>';
+      const sum = inv.items.filter((x) => selected.has(x.id)).reduce((a, x) => a + x.value, 0);
+      sellSel.disabled = !selected.size;
+      sellSel.textContent = selected.size ? `${selected.size} verkaufen (+${fmt(sum)})` : 'Auswahl verkaufen';
+    };
+    paintGrid();
+    const sortSel = body.querySelector('.inv-sort');
+    sortSel.value = invSort;
+    sortSel.addEventListener('change', () => { invSort = sortSel.value; try { localStorage.setItem('casino.inv.sort', invSort); } catch { /* egal */ } paintGrid(); });
+    grid.addEventListener('click', (e) => {
+      const card = e.target.closest('[data-id]');
+      if (!card) return;
+      const id = card.dataset.id;
+      if (selected.has(id)) selected.delete(id); else selected.add(id);
+      sfx.click();
+      paintGrid();
+    });
+    const doSell = async (payload, label) => {
+      try {
+        const r = await ctx.post('/api/cases/sell', payload);
+        ctx.setBalance(r.balance);
+        sfx.coin();
+        toast(`${label}: ${r.sold} Skin${r.sold === 1 ? '' : 's'} für +${fmt(r.amount)} Chips`, 'ok');
+        paintInventory();
+      } catch (e) { toast(e.message, 'err'); }
+    };
+    sellSel.addEventListener('click', () => doSell({ ids: [...selected] }, 'Verkauft'));
+    body.querySelector('.sell-all').addEventListener('click', async () => {
+      if (!(await confirmDialog('Alles verkaufen?', `Alle ${inv.count} Skins für ${fmt(inv.total)} Chips verkaufen?`, 'Verkaufen', true))) return;
+      doSell({ all: true }, 'Alles verkauft');
+    });
+  }
+
   function paintBody() {
     el.querySelectorAll('[data-t]').forEach((b) => b.classList.toggle('btn-gold', b.dataset.t === tab));
-    if (tab === 'open') paintOpen(); else paintBattles();
+    paintPicker();
+    if (tab === 'open') paintOpen(); else if (tab === 'inventory') paintInventory(); else paintBattles();
   }
   el.querySelectorAll('[data-t]').forEach((b) => b.addEventListener('click', () => {
     if (busy) return;
@@ -240,8 +322,8 @@ export async function cases(root, ctx) {
     sfx.click();
     paintBody();
   }));
-  paintPicker();
   paintBody();
+  ctx.post('/api/cases/inventory').then((r) => setInvCount(r.count)).catch(() => {});
   return () => { alive = false; clearTimeout(timer); };
 }
 
