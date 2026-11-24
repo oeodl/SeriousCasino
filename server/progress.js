@@ -4,7 +4,9 @@
 const db = require('./db');
 
 // ---------- XP & Stufen ----------
-const XP_PER_CHIPS = 10; // 1 XP pro 10 gesetzte Chips
+const XP_PER_CHIPS = 10; // 1 XP pro 10 gesetzte Chips …
+const XP_MAX_ROUND = 500; // … aber höchstens 500 XP pro Runde (sonst steigen Spieler mit riesigen Einsätzen endlos auf)
+const MAX_LEVEL = 100;
 const xpForLevel = (lvl) => Math.round(400 * (Math.pow(lvl, 1.6) - 1)); // XP, die man insgesamt für diese Stufe braucht (Stufe 1 = 0)
 const TIERS = [
   { from: 1, name: 'Bronze', icon: '🥉', color: '#cd7f32' },
@@ -19,12 +21,18 @@ const levelUpReward = (lvl) => 250 * lvl;
 
 function levelFromXp(xp) {
   let lvl = 1;
-  while (xp >= xpForLevel(lvl + 1)) lvl++;
+  while (lvl < MAX_LEVEL && xp >= xpForLevel(lvl + 1)) lvl++;
   return lvl;
 }
 
 function vip(p) {
-  return (p.vip ||= { xp: 0, level: 1 });
+  const v = (p.vip ||= { xp: 0, level: 1 });
+  // Alte Spielstände aus der Zeit ohne Obergrenze auf die Höchststufe zurückholen
+  if (!(v.level <= MAX_LEVEL) || !(v.xp <= xpForLevel(MAX_LEVEL))) {
+    v.level = Math.min(MAX_LEVEL, Math.max(1, Math.floor(v.level) || 1));
+    v.xp = Math.min(Number(v.xp) || 0, xpForLevel(MAX_LEVEL));
+  }
+  return v;
 }
 
 // ---------- Tägliche Aufgaben ----------
@@ -63,6 +71,9 @@ function quests(p) {
   if (!p.quests || p.quests.date !== today()) p.quests = makeQuests(p);
   return p.quests;
 }
+
+// Tagestruhe: Bonus, wenn alle Aufgaben des Tages geschafft sind
+const CHEST_REWARD = 2500;
 
 // ---------- Erfolge ----------
 const ACHIEVEMENTS = [
@@ -150,7 +161,7 @@ function onRound(p, game, bet, payout) {
   if (game === 'admin') return;
   const v = vip(p);
   // XP & Stufe
-  v.xp += Math.max(1, Math.floor(bet / XP_PER_CHIPS));
+  v.xp = Math.min(v.xp + Math.min(XP_MAX_ROUND, Math.max(1, Math.floor(bet / XP_PER_CHIPS))), xpForLevel(MAX_LEVEL));
   const newLevel = levelFromXp(v.xp);
   while (v.level < newLevel) {
     v.level++;
@@ -185,6 +196,12 @@ function onRound(p, game, bet, payout) {
       notice(p, { type: 'quest', text: `✅ Aufgabe geschafft: ${t.text} – +${t.reward.toLocaleString('de-DE')} Chips` });
     }
   }
+  if (!q.chest && q.list.every((t) => t.done)) {
+    q.chest = true;
+    p.balance += CHEST_REWARD;
+    notice(p, { type: 'chest', text: `🧰 Tagestruhe geöffnet: alle Aufgaben geschafft! +${CHEST_REWARD.toLocaleString('de-DE')} Chips` });
+    require('./chat').system(`🧰 ${p.name} hat alle Tagesaufgaben geschafft!`);
+  }
   // Erfolge
   p.achievements ||= {};
   const c = { game, bet, payout };
@@ -205,9 +222,12 @@ function overview(p) {
   const v = vip(p);
   const cur = xpForLevel(v.level), next = xpForLevel(v.level + 1);
   const t = tierOf(v.level);
+  const max = v.level >= MAX_LEVEL;
   return {
-    level: v.level, xp: v.xp, levelXp: cur, nextXp: next, tier: t, tiers: TIERS, nextReward: levelUpReward(v.level + 1),
-    quests: quests(p).list.map(({ seen, ...q }) => q),
+    level: v.level, xp: v.xp, levelXp: cur, nextXp: next, tier: t, tiers: TIERS, maxLevel: MAX_LEVEL, isMax: max,
+    nextReward: max ? 0 : levelUpReward(v.level + 1), xpPerChips: XP_PER_CHIPS, xpMaxRound: XP_MAX_ROUND,
+    quests: quests(p).list.map(({ seen, ...q }) => q), chest: { reward: CHEST_REWARD, open: !!quests(p).chest },
+    streak: require('./profiles').dailyInfo(p),
     achievements: ACHIEVEMENTS.map(({ test, ...a }) => ({ ...a, unlocked: p.achievements?.[a.id] || null })),
     weekly: weekly(p),
   };

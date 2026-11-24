@@ -127,3 +127,12 @@
   .hilo-btn { min-width: 0; flex: 1; padding: 12px 6px; }
   .hilo-main { width: 100%; }
 }
+
+/* Tagesserie (VIP-Seite) */
+.streak-row { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin: 10px 0; }
+.streak-day { text-align: center; padding: 8px 2px; border-radius: 10px; background: var(--panel2); border: 1px solid transparent; font-size: .8rem; }
+.streak-day small { display: block; opacity: .7; font-size: .7rem; }
+.streak-day.got { background: rgba(227, 179, 65, .18); border-color: var(--gold-dark); }
+.streak-day.got b { color: var(--gold2); }
+.streak-day.next { border-color: var(--gold2); box-shadow: 0 0 0 2px rgba(227, 179, 65, .25); }
+@media (max-width: 420px) { .streak-day b { font-size: .7rem; } }

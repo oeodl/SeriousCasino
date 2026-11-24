@@ -3,7 +3,7 @@ import { h, esc, fmt } from './ui.js';
 
 export async function vip(root, ctx) {
   const o = await ctx.get('/api/me/progress');
-  const pct = Math.min(100, Math.round(((o.xp - o.levelXp) / Math.max(1, o.nextXp - o.levelXp)) * 100));
+  const pct = o.isMax ? 100 : Math.min(100, Math.round(((o.xp - o.levelXp) / Math.max(1, o.nextXp - o.levelXp)) * 100));
   const unlocked = o.achievements.filter((a) => a.unlocked).length;
   const tomorrow = new Date(); tomorrow.setHours(24, 0, 0, 0);
   const hoursLeft = Math.ceil((tomorrow - Date.now()) / 3600000);
@@ -15,8 +15,9 @@ export async function vip(root, ctx) {
       <div class="vip-main">
         <div class="vip-tier">${esc(o.tier.name)} · Stufe ${o.level}</div>
         <div class="vip-bar"><div style="width:${pct}%"></div></div>
-        <div class="vip-sub"><span>${fmt(o.xp - o.levelXp)} / ${fmt(o.nextXp - o.levelXp)} XP bis Stufe ${o.level + 1}</span><span class="gold">Belohnung: +${fmt(o.nextReward)} Chips</span></div>
-        <div class="muted" style="font-size:.8rem;margin-top:6px">Jede Runde bringt XP: 1 XP pro 10 gesetzte Chips.</div>
+        <div class="vip-sub">${o.isMax ? `<span>👑 Höchststufe ${o.maxLevel} erreicht!</span>`
+          : `<span>${fmt(o.xp - o.levelXp)} / ${fmt(o.nextXp - o.levelXp)} XP bis Stufe ${o.level + 1}</span><span class="gold">Belohnung: +${fmt(o.nextReward)} Chips</span>`}</div>
+        <div class="muted" style="font-size:.8rem;margin-top:6px">Jede Runde bringt XP: 1 XP pro ${o.xpPerChips} gesetzte Chips, höchstens ${fmt(o.xpMaxRound)} XP pro Runde.</div>
       </div>
     </div>
     <div class="vip-tiers">${o.tiers.map((t) => `<div class="vt ${o.level >= t.from ? 'reached' : ''}" style="--tc:${t.color}"><span>${t.icon}</span><b>${esc(t.name)}</b><small>ab Stufe ${t.from}</small></div>`).join('')}</div>
@@ -28,6 +29,22 @@ export async function vip(root, ctx) {
           <div class="q-top"><span>${q.done ? '✅' : '🎯'} ${esc(q.text)}</span><b class="gold">+${fmt(q.reward)}</b></div>
           <div class="vip-bar small"><div style="width:${Math.round((q.progress / q.target) * 100)}%"></div></div>
           <small class="muted">${fmt(q.progress)} / ${fmt(q.target)}</small></div>`).join('')}
+        <div class="quest ${o.chest.open ? 'done' : ''}" style="margin-top:10px">
+          <div class="q-top"><span>${o.chest.open ? '🧰 Tagestruhe geöffnet!' : `🔒 Tagestruhe: schaffe alle Aufgaben (${o.quests.filter((q) => q.done).length}/${o.quests.length})`}</span><b class="gold">+${fmt(o.chest.reward)}</b></div>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>🔥 Tagesserie</h2>
+        <p class="muted" style="margin-top:0">Hol dir jeden Tag den Tagesbonus ab – mit jedem Tag in Folge wird er größer. Einen Tag verpasst? Dann geht es wieder bei Tag 1 los.</p>
+        <div class="streak-row">${o.streak.days.map((amount, i) => {
+          const day = i + 1, s = o.streak;
+          const got = day <= Math.min(s.streak, s.maxDay);
+          const next = s.available && day === Math.min(s.nextDay, s.maxDay);
+          return `<div class="streak-day ${got ? 'got' : ''} ${next ? 'next' : ''}"><small>Tag ${day}${day === s.maxDay ? '+' : ''}</small><b>${fmt(amount)}</b></div>`;
+        }).join('')}</div>
+        <p style="margin-bottom:0">${o.streak.available
+          ? `Heute abholen: <b class="gold">+${fmt(o.streak.amount)}</b> (Tag ${o.streak.nextDay})`
+          : `✅ Heute abgeholt (Tag ${o.streak.streak}). Morgen: <b class="gold">+${fmt(o.streak.tomorrow)}</b> – nicht vergessen!`}</p>
       </div>
       <div class="panel">
         <h2>📈 Diese Woche</h2>
