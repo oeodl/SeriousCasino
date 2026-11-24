@@ -18,16 +18,30 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  deploy:
+  # Hochladen und Veröffentlichen sind (wie in GitHubs offizieller Vorlage) getrennte Jobs:
+  # Liefen beide direkt nacheinander im selben Job, fand der Veröffentlichungs-Schritt die Dateien manchmal noch nicht.
+  build:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
           path: public
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url || steps.retry.outputs.page_url }}
+    steps:
       - id: deployment
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+      # Falls GitHub beim ersten Mal hakt: kurz warten und noch einmal versuchen
+      - if: steps.deployment.outcome == 'failure'
+        run: sleep 30
+      - id: retry
+        if: steps.deployment.outcome == 'failure'
         uses: actions/deploy-pages@v4
