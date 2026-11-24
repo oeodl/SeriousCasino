@@ -294,6 +294,19 @@ export function settings(root, ctx) {
       </div>
       <div class="panel invite-box"></div>
       <div class="panel">
+        <h2>💬 Feedback</h2>
+        <p class="muted">Idee für ein neues Spiel, einen Fehler gefunden oder sonst was auf dem Herzen? Schreib es hier – der Admin liest mit.</p>
+        <form id="feedbackForm" class="auth-form">
+          <select class="input" name="kind">
+            <option value="idee">💡 Idee / Wunsch</option>
+            <option value="fehler">🐞 Fehler</option>
+            <option value="sonstiges">💬 Sonstiges</option>
+          </select>
+          <textarea class="input" name="text" rows="4" maxlength="1000" placeholder="Dein Feedback …" required style="resize:vertical"></textarea>
+          <button class="btn btn-gold" type="submit">Absenden</button>
+        </form>
+      </div>
+      <div class="panel">
         <h2>🛠️ Admin-Bereich</h2>
         <p class="muted">Spielern Chips geben oder abziehen, Profile zurücksetzen, vergessene Passwörter neu vergeben. Geschützt mit eigenem Admin-Passwort.</p>
         <a class="btn" href="#/admin">Admin-Bereich öffnen</a>
@@ -366,6 +379,17 @@ export function settings(root, ctx) {
       toast('Passwort gespeichert.', 'ok');
       location.hash = '#/settings?' + Date.now(); // Seite neu aufbauen
     } catch (err) { toast(err.message, 'err'); }
+  });
+  el.querySelector('#feedbackForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = e.target.querySelector('button');
+    btn.disabled = true;
+    try {
+      await ctx.post('/api/feedback', { kind: e.target.kind.value, text: e.target.text.value });
+      e.target.text.value = '';
+      toast('Danke für dein Feedback! 🙏', 'ok');
+    } catch (err) { toast(err.message, 'err'); }
+    btn.disabled = false;
   });
   el.querySelector('#resetBtn').addEventListener('click', async () => {
     if (!(await confirmDialog('Profil zurücksetzen?', `${me.name} bekommt wieder 10.000 Chips. Statistik und Verlauf werden gelöscht.`, 'Zurücksetzen', true))) return;

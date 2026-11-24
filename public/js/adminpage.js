@@ -291,6 +291,30 @@ export async function admin(root, ctx) {
       } catch (e) { toast(e.message, 'err'); }
     }));
 
+    // ---------- Feedback der Spieler ----------
+    body.insertAdjacentHTML('beforeend', `<div class="panel section fb-admin"><h2>💬 Feedback</h2><div class="fb-list"></div></div>`);
+    const fbList = body.querySelector('.fb-list');
+    const KIND = { idee: '💡 Idee', fehler: '🐞 Fehler', sonstiges: '💬 Sonstiges' };
+    function paintFb(items) {
+      const unread = items.filter((f) => !f.read).length;
+      body.querySelector('.fb-admin h2').textContent = `💬 Feedback (${items.length}${unread ? `, ${unread} neu` : ''})`;
+      fbList.innerHTML = items.map((f) => `<div class="fb-item" data-id="${esc(f.id)}" style="padding:10px 0;border-top:1px solid rgba(255,255,255,.08);${f.read ? 'opacity:.6' : ''}">
+          <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:6px">
+            <span>${f.read ? '' : '🟡 '}<b>${esc(f.name)}</b> · ${KIND[f.kind] || esc(f.kind)} · <span class="muted">${when(f.at)}</span></span>
+            <span class="row" style="gap:6px"><button class="btn btn-sm" data-fb="read">${f.read ? 'Als neu markieren' : 'Gelesen'}</button><button class="btn btn-sm btn-ghost" data-fb="delete">Löschen</button></span>
+          </div>
+          <div style="white-space:pre-wrap;margin-top:6px;overflow-wrap:anywhere">${esc(f.text)}</div>
+        </div>`).join('') || '<p class="muted" style="margin:0">Noch kein Feedback.</p>';
+    }
+    adminApi('GET', '/api/admin/feedback').then(paintFb).catch((e) => { fbList.textContent = e.message; });
+    fbList.addEventListener('click', async (e) => {
+      const b = e.target.closest('[data-fb]');
+      if (!b) return;
+      const id = b.closest('.fb-item').dataset.id;
+      if (b.dataset.fb === 'delete' && !(await confirmDialog('Feedback löschen?', 'Der Eintrag wird endgültig gelöscht.', 'Löschen', true))) return;
+      try { paintFb(await adminApi('POST', `/api/admin/feedback/${b.dataset.fb}`, { id })); } catch (err) { toast(err.message, 'err'); }
+    });
+
     body.querySelector('#adminLogout').addEventListener('click', async () => {
       try { await adminApi('POST', '/api/admin/logout'); } catch { /* egal */ }
       adminToken.set('');
