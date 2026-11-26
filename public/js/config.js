@@ -5,4 +5,7 @@ const RENDER_SERVER = 'https://seriouscasino.onrender.com';
 
 // Auf github.io: Server bei Render benutzen. Überall sonst (PC, Heimnetz, Codespaces, Render selbst):
 // derselbe Server, von dem die Seite kommt.
+// Wird beim Veröffentlichen auf GitHub Pages durch die Versionsnummer ersetzt (scripts/stamp-version.js)
+export const BUILD = '__CASINO_VERSION__';
+
 export const API_BASE = location.hostname.endsWith('.github.io') ? RENDER_SERVER.replace(/\/$/, '') : '';

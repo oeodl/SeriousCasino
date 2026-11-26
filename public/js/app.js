@@ -6,6 +6,7 @@ import * as pages from './pages.js';
 import { betsPanel } from './bets.js';
 import { initChat } from './chatui.js';
 import { resyncPush } from './push.js';
+import { initUpdateCheck } from './update.js';
 
 export const CATS = [
   { id: 'live', name: 'Live & Multiplayer', icon: '🟢' },
@@ -333,6 +334,7 @@ window.addEventListener('hashchange', render);
   render();
   pollDuels();
   initChat({ setBalance });
+  initUpdateCheck();
 })();
 
 document.addEventListener('visibilitychange', () => {

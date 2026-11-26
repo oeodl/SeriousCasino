@@ -5,7 +5,7 @@ name: Seite auf GitHub Pages veröffentlichen
 on:
   push:
     branches: [main]
-    paths: ['public/**', '.github/workflows/pages.yml']
+    paths: ['public/**', 'scripts/stamp-version.js', '.github/workflows/pages.yml']
   workflow_dispatch:
 
 permissions:
@@ -25,6 +25,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+      # Versionsnummer an alle Dateien hängen, damit Browser nach einem Update nichts Altes aus dem Zwischenspeicher nehmen
+      - run: node scripts/stamp-version.js public ${{ github.sha }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: public

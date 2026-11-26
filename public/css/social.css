@@ -185,3 +185,7 @@ body.chat-open .chat-drawer { transform: none; }
 .bj-insure-q { font-size: .9rem; line-height: 1.45; }
 .bj-insure .row { gap: 8px; }
 .bj-insure .btn { flex: 1; }
+
+/* Hinweis: neue Version verfügbar */
+.update-banner { position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); z-index: 9000; display: flex; gap: 12px; align-items: center; padding: 10px 14px; border-radius: 14px; background: #13202d; border: 1px solid var(--gold-dark); box-shadow: 0 10px 30px rgba(0, 0, 0, .5); font-size: .9rem; max-width: calc(100vw - 32px); animation: winPop .3s ease; }
+@media (min-width: 900px) { .update-banner { bottom: 24px; } }
