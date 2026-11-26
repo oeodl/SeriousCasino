@@ -125,6 +125,12 @@ function resetProfile(name) {
   return { name: p.name, balance: p.balance };
 }
 
+function resetStats(name) {
+  const p = find(name);
+  profiles.resetStats(p);
+  return { name: p.name, balance: p.balance };
+}
+
 function resetPassword(name, newPassword) {
   const p = find(name);
   // Wie beim normalen Ändern, nur ohne altes Passwort; alle Anmeldungen des Spielers werden beendet
@@ -140,4 +146,4 @@ function remove(name) {
   return { name: p.name };
 }
 
-module.exports = { isSet, setPassword, login, logout, requireAdmin, list, adjust, resetProfile, resetPassword, remove, FILE };
+module.exports = { isSet, setPassword, login, logout, requireAdmin, list, adjust, resetProfile, resetStats, resetPassword, remove, FILE };

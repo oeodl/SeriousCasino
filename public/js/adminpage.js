@@ -110,6 +110,7 @@ export async function admin(root, ctx) {
           </div></td>
           <td><div class="admin-more">
             <button class="btn btn-sm" data-a="pw">Passwort</button>
+            <button class="btn btn-sm" data-a="stats" title="Gewinn/Verlust, Runden und Verlauf auf 0 – Guthaben bleibt">Statistik</button>
             <button class="btn btn-sm" data-a="reset">Zurücksetzen</button>
             <button class="btn btn-sm btn-ghost" data-a="del">Löschen</button>
           </div></td></tr>`).join('')}</tbody></table></div>` : '<p class="muted">Noch keine Spieler.</p>'}
@@ -345,6 +346,12 @@ export async function admin(root, ctx) {
         const r = await adminApi('POST', '/api/admin/adjust', { name, mode: a === 'set' ? 'set' : 'add', amount: a === 'sub' ? -n : n });
         await done(`${name}: ${fmt(r.before)} → ${fmt(r.balance)} Chips`);
       })));
+
+      tr.querySelector('[data-a="stats"]').addEventListener('click', () => run(async () => {
+        if (!(await confirmDialog('Statistik zurücksetzen?', `Gewinn/Verlust, Runden, größter Gewinn, Verlauf und Wochenwertung von ${name} werden auf 0 gesetzt. Guthaben, Stufe und Erfolge bleiben.`, 'Statistik zurücksetzen', true))) return;
+        await adminApi('POST', '/api/admin/reset-stats', { name });
+        await done(`Statistik von ${name} wurde zurückgesetzt.`);
+      }));
 
       tr.querySelector('[data-a="reset"]').addEventListener('click', () => run(async () => {
         if (!(await confirmDialog('Profil zurücksetzen?', `${name} bekommt wieder 10.000 Chips, Statistik und Verlauf werden gelöscht.`, 'Zurücksetzen', true))) return;

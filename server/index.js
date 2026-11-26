@@ -293,6 +293,7 @@ const adminRoute = (fn) => handle((req) => { admin.requireAdmin(adminToken(req))
 app.get('/api/admin/players', adminRoute(() => admin.list()));
 app.post('/api/admin/adjust', adminRoute((b) => admin.adjust(b.name, b.mode, b.amount)));
 app.post('/api/admin/reset', adminRoute((b) => admin.resetProfile(b.name)));
+app.post('/api/admin/reset-stats', adminRoute((b) => admin.resetStats(b.name)));
 app.post('/api/admin/password', adminRoute((b) => admin.resetPassword(b.name, b.password)));
 app.post('/api/admin/delete', adminRoute((b) => admin.remove(b.name)));
 app.get('/api/admin/livecrash', adminRoute(() => livecrash.adminState()));

@@ -185,6 +185,14 @@ function reset(p) {
   p.inventory = []; // Skins aus Cases
 }
 
+/** Nur Statistik, Verlauf und Wochenwertung leeren – Guthaben, Stufe und Erfolge bleiben */
+function resetStats(p) {
+  p.stats = emptyStats();
+  p.history = [];
+  p.weekly = null;
+  p.loseStreak = 0;
+}
+
 function refillInfo(p) {
   const nextAt = (p.lastRefill || 0) + REFILL_COOLDOWN_MS;
   return {
@@ -304,6 +312,6 @@ function tip(p, toName, amount) {
 
 module.exports = {
   START_BALANCE, GAME_NAMES,
-  all, create, get, remove, rename, reset, refill, claimDaily, dailyInfo, record, publicView, summary,
+  all, create, get, remove, rename, reset, resetStats, refill, claimDaily, dailyInfo, record, publicView, summary,
   login, logout, setPassword, tip,
 };
