@@ -51,7 +51,7 @@ Jedes Profil (nur ein Name, kein Passwort) hat sein eigenes Guthaben. Profil wec
 - **Live-Crash**: eine gemeinsame Rakete für alle. 8 Sekunden Wettphase, dann steigt sie – alle sehen live, wer setzt und wer aussteigt.
 - **Live-Roulette**: ein Rad für alle. 15 Sekunden setzen (auch mehrmals nachlegen), dann dreht sich die Kugel für alle gleichzeitig.
 - **Jackpot**: Alle zahlen in einen Topf. Ab 2 Spielern läuft ein 30-Sekunden-Countdown, dann zieht das Rad den Gewinner – je mehr du eingezahlt hast, desto größer deine Chance auf den ganzen Topf.
-- **Blackjack-Tisch**: bis zu 5 Spieler gegen denselben Dealer. Nach dem ersten Einsatz 15 Sekunden Wettphase, dann ist jeder der Reihe nach dran (20 Sekunden, sonst wird automatisch gehalten). Blackjack zahlt 3:2.
+- **Blackjack-Tisch**: bis zu 5 Spieler gegen denselben Dealer. Nach dem ersten Einsatz 15 Sekunden Wettphase, zeigt der Dealer ein Ass, kann sich jeder 10 Sekunden lang versichern. Dann ist jeder der Reihe nach dran (20 Sekunden pro Hand, sonst wird automatisch gehalten). Blackjack zahlt 3:2, Teilen bis 4 Hände, Verdoppeln.
 - **Texas Hold'em**: echtes Poker gegeneinander, bis zu 6 am Tisch. Du kaufst dich mit 1.000–20.000 Chips ein, Blinds 25/50, No-Limit. Ab 2 Spielern geht's los; 25 Sekunden pro Zug. Beim Aufstehen gehen deine Tisch-Chips zurück aufs Konto. Das Casino nimmt nichts.
 - **Cases** (Menü): Cases im Counter-Strike-Stil öffnen, von 100 Chips bis zu den **High-Roller-Cases** (bis 10 Mio.). Jeder Skin hat einen Zustand (Fabrikneu bis Kampfspuren) und mit etwas Glück StatTrak™, beides beeinflusst den Wert. Gezogene Skins landen im **Inventar** und können dort einzeln oder alle auf einmal verkauft werden. Oder **Case Battles** mit 2–4 Spielern. Alle öffnen dieselben Cases, der höchste Gesamtwert gewinnt alle Skins (als Chips). Leere Plätze lassen sich mit Bots füllen (gewinnt ein Bot, geht der Topf ans Haus). Die Skins sind frei erfunden; Auszahlungsquote ≈ 92 %.
 - **Admin**: Im Admin-Bereich siehst du, wer online ist, und kannst Live-Crash steuern („Jetzt crashen“, „Diese/nächste Runde crasht bei …“). Die Spieler sehen davon nichts.
@@ -104,7 +104,7 @@ Das Profil hat dann wieder 10.000 Chips, Statistik und Verlauf sind gelöscht.
 | Spiel | Kurz erklärt | Auszahlungsquote* |
 |---|---|---|
 | 🎰 Slots | 5 Walzen, 10 Gewinnlinien, mind. 3 gleiche von links | ≈ 96 % |
-| 🃏 Blackjack | 6 Decks, Dealer zieht bis 17, Blackjack zahlt 3:2, Verdoppeln, Teilen | ≈ 99 % |
+| 🃏 Blackjack | 6 Decks, Dealer zieht bis 17, Blackjack zahlt 3:2, Verdoppeln, Teilen, Versicherung (bei Ass des Dealers, zahlt 2:1) | ≈ 99 % |
 | 🎡 Roulette | Europäisch (eine Null): Zahlen, Farben, Gerade/Ungerade, Dutzende, Kolonnen | 97,3 % |
 | ♠️ Video Poker | Jacks or Better, 9/6-Tabelle | ≈ 99,5 % |
 | 🚀 Crash | Multiplikator steigt – rechtzeitig auscashen (auch automatisch) | ≈ 99 % |
@@ -133,7 +133,7 @@ Das Profil hat dann wieder 10.000 Chips, Statistik und Verlauf sind gelöscht.
 \* Langfristiger Durchschnitt wie in echten Casinos – auf Dauer gewinnt also das Haus. 😉
 Alle Ergebnisse werden auf dem Server mit einem kryptografischen Zufallsgenerator (`crypto.randomInt`) erzeugt.
 
-**Tastenkürzel:** Leertaste = Drehen/Würfeln/Start · Blackjack: H, S, D, P · Video Poker: 1–5 zum Halten · Hi-Lo: ↑ ↓ →.
+**Tastenkürzel:** Leertaste = Drehen/Würfeln/Start · Blackjack: H, S, D, P (Versicherung: Y/N) · Video Poker: 1–5 zum Halten · Hi-Lo: ↑ ↓ →.
 
 ## Mit Freunden spielen
 

@@ -1,6 +1,7 @@
 // Blackjack: 6 Decks, Dealer steht auf allen 17, Blackjack zahlt 3:2.
 // Double auf die ersten zwei Karten (auch nach Split), Split bis zu 4 Hände,
 // geteilte Asse bekommen nur je eine Karte. Dealer prüft sofort auf Blackjack.
+// Versicherung: Zeigt der Dealer ein Ass, kann man sich für den halben Einsatz versichern (zahlt 2:1, wenn der Dealer Blackjack hat).
 const { makeDeck, parseBet, GameError } = require('../util');
 const profiles = require('../profiles');
 
@@ -38,13 +39,18 @@ function view(st, finished = false, extra = {}) {
   const dealerCards = finished ? st.dealer : [st.dealer[0], null];
   const hand = st.hands[st.activeHand];
   const v = hand ? handValue(hand.cards).total : 0;
+  const insuring = st.insurance === 'offered';
   return {
     finished,
     dealer: { cards: dealerCards, value: finished ? handValue(st.dealer).total : handValue([st.dealer[0]]).total },
     hands: st.hands.map((h) => ({ cards: h.cards, bet: h.bet, value: handValue(h.cards).total, soft: handValue(h.cards).soft, done: h.done, doubled: h.doubled, result: h.result ?? null, payout: h.payout ?? null })),
     activeHand: finished ? -1 : st.activeHand,
-    canDouble: !finished && !!hand && hand.cards.length === 2 && !hand.splitAces && v < 21,
-    canSplit: !finished && !!hand && hand.cards.length === 2 && cardValue(hand.cards[0]) === cardValue(hand.cards[1]) && st.hands.length < MAX_HANDS && !hand.splitAces,
+    canDouble: !finished && !insuring && !!hand && hand.cards.length === 2 && !hand.splitAces && v < 21,
+    canSplit: !finished && !insuring && !!hand && hand.cards.length === 2 && cardValue(hand.cards[0]) === cardValue(hand.cards[1]) && st.hands.length < MAX_HANDS && !hand.splitAces,
+    canInsure: !finished && insuring,
+    insuranceCost: insuring ? Math.floor(st.hands[0].bet / 2) : 0,
+    insurance: st.insuranceBet || 0,
+    insurancePaid: finished ? st.insurancePaid || 0 : 0,
     ...extra,
   };
 }
@@ -82,9 +88,16 @@ function finish(p, st) {
     totalBet += h.bet;
     totalPayout += pay;
   }
+  // Versicherung abrechnen (zählt als eigener Einsatz)
+  st.insurancePaid = 0;
+  if (st.insuranceBet) {
+    totalBet += st.insuranceBet;
+    if (dealerBJ) { st.insurancePaid = st.insuranceBet * 3; totalPayout += st.insurancePaid; }
+  }
   p.balance += totalPayout;
   const names = { win: 'Gewonnen', blackjack: 'Blackjack!', push: 'Unentschieden', lose: 'Verloren', bust: 'Überkauft' };
-  const detail = st.hands.map((h) => `${handValue(h.cards).total} vs ${dealerBJ ? 'BJ' : d}: ${names[h.result]}`).join(' | ');
+  const detail = st.hands.map((h) => `${handValue(h.cards).total} vs ${dealerBJ ? 'BJ' : d}: ${names[h.result]}`).join(' | ')
+    + (st.insuranceBet ? ` | Versicherung ${dealerBJ ? 'gewonnen' : 'verloren'}` : '');
   profiles.record(p, 'blackjack', totalBet, totalPayout, detail);
   delete p.active.blackjack;
   return view(st, true, { payout: totalPayout, totalBet, dealerBlackjack: dealerBJ });
@@ -106,12 +119,34 @@ function deal(p, body) {
   st.dealer.push(draw(st));
   st.hands.push({ cards: pc, bet, done: false, doubled: false, splitAces: false });
   p.active.blackjack = st;
+  // Dealer zeigt ein Ass → erst Versicherung anbieten (bei eigenem Blackjack nicht nötig)
+  if (st.dealer[0].r === 14 && !isBlackjack(pc)) { st.insurance = 'offered'; return view(st); }
   if (isBlackjack(pc) || isBlackjack(st.dealer)) return finish(p, st);
   return view(st);
 }
 
+function insurance(p, body) {
+  const st = current(p);
+  if (st.insurance !== 'offered') throw new GameError('Versicherung ist gerade nicht möglich.');
+  if (body.take) {
+    const cost = Math.floor(st.hands[0].bet / 2);
+    if (cost < 1) throw new GameError('Der Einsatz ist zu klein für eine Versicherung.');
+    if (p.balance < cost) throw new GameError('Nicht genug Chips für die Versicherung.');
+    p.balance -= cost;
+    st.insuranceBet = cost;
+  }
+  st.insurance = 'done';
+  if (isBlackjack(st.dealer)) return finish(p, st);
+  return view(st, false, { insuranceLost: st.insuranceBet || 0 });
+}
+
+function noInsuranceOpen(st) {
+  if (st.insurance === 'offered') throw new GameError('Erst entscheiden: Versicherung ja oder nein?');
+}
+
 function hit(p) {
   const st = current(p);
+  noInsuranceOpen(st);
   const h = st.hands[st.activeHand];
   h.cards.push(draw(st));
   if (handValue(h.cards).total >= 21) h.done = true;
@@ -120,12 +155,14 @@ function hit(p) {
 
 function stand(p) {
   const st = current(p);
+  noInsuranceOpen(st);
   st.hands[st.activeHand].done = true;
   return advance(p, st);
 }
 
 function double(p) {
   const st = current(p);
+  noInsuranceOpen(st);
   const v = view(st);
   if (!v.canDouble) throw new GameError('Verdoppeln ist hier nicht erlaubt.');
   const h = st.hands[st.activeHand];
@@ -140,6 +177,7 @@ function double(p) {
 
 function split(p) {
   const st = current(p);
+  noInsuranceOpen(st);
   const v = view(st);
   if (!v.canSplit) throw new GameError('Teilen ist hier nicht erlaubt.');
   const h = st.hands[st.activeHand];
@@ -158,5 +196,5 @@ function split(p) {
   return advance(p, st);
 }
 
-module.exports = { state, deal, hit, stand, double, split };
+module.exports = { state, deal, hit, stand, double, split, insurance };
 module.exports._internal = { handValue, isBlackjack };

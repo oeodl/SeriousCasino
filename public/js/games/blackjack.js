@@ -22,8 +22,12 @@ export default async function mount(root, ctx) {
         <button class="btn" data-a="double">Verdoppeln <small>(D)</small></button>
         <button class="btn" data-a="split">Teilen <small>(P)</small></button>
       </div>
+      <div class="bj-insure hidden">
+        <div class="bj-insure-q">🛡️ Dealer zeigt ein Ass – <b>Versicherung</b> für <b class="gold ins-cost"></b> Chips?<br><small class="muted">Zahlt 2:1, falls der Dealer Blackjack hat.</small></div>
+        <div class="row"><button class="btn btn-gold" data-ins="1">Versichern <small>(Y)</small></button><button class="btn" data-ins="0">Nein danke <small>(N)</small></button></div>
+      </div>
       <div class="muted" style="font-size:.8rem;line-height:1.5">
-        Dealer zieht bis 17 · Blackjack zahlt 3:2<br>Verdoppeln auf 2 Karten · Teilen bis 4 Hände · 6 Decks
+        Dealer zieht bis 17 · Blackjack zahlt 3:2<br>Verdoppeln auf 2 Karten · Teilen bis 4 Hände · Versicherung 2:1 · 6 Decks
       </div>
     </div>
     <div class="game-stage">
@@ -47,8 +51,14 @@ export default async function mount(root, ctx) {
   const handsEl = el.querySelector('.bj-hands');
   const msg = el.querySelector('.result-msg');
 
+  const insureEl = el.querySelector('.bj-insure');
   function setControls(v) {
     const running = v && !v.finished && !v.none;
+    const insuring = !!(running && v.canInsure);
+    insureEl.classList.toggle('hidden', !insuring);
+    el.querySelector('.bj-actions').classList.toggle('hidden', insuring);
+    if (insuring) insureEl.querySelector('.ins-cost').textContent = fmt(v.insuranceCost);
+    insureEl.querySelectorAll('button').forEach((b) => (b.disabled = busy || (b.dataset.ins === '1' && ctx.getBalance() < v?.insuranceCost)));
     dealBtn.classList.toggle('hidden', !!running);
     bet.setDisabled(!!running || busy);
     dealBtn.disabled = busy;
@@ -94,7 +104,7 @@ export default async function mount(root, ctx) {
       renderDealer(v.dealer.cards, v.dealer.value, shown.dealer);
       shown.dealer = v.dealer.cards.length;
       msg.className = 'result-msg';
-      msg.textContent = v.hands.length > 1 ? `Hand ${v.activeHand + 1} von ${v.hands.length}` : '';
+      msg.textContent = v.canInsure ? 'Versicherung?' : v.insuranceLost ? `Dealer hat keinen Blackjack – Versicherung (${fmt(v.insuranceLost)}) verloren` : v.hands.length > 1 ? `Hand ${v.activeHand + 1} von ${v.hands.length}` : '';
     } else {
       // Dealer-Karten nacheinander aufdecken
       const cards = v.dealer.cards;
@@ -111,20 +121,21 @@ export default async function mount(root, ctx) {
       shown.dealer = cards.length;
       const net = v.payout - v.totalBet;
       msg.className = 'result-msg ' + (net > 0 ? 'win' : net < 0 ? 'lose' : '');
-      msg.textContent = net > 0 ? `Gewonnen: +${fmt(net)} Chips` : net < 0 ? `Verloren: −${fmt(-net)} Chips` : 'Unentschieden – Einsatz zurück';
+      msg.textContent = (net > 0 ? `Gewonnen: +${fmt(net)} Chips` : net < 0 ? `Verloren: −${fmt(-net)} Chips` : 'Unentschieden – Einsatz zurück')
+        + (v.insurance ? (v.insurancePaid ? ' · Versicherung zahlt ' + fmt(v.insurancePaid) : ' · Versicherung verloren') : '');
       if (net > 0) celebrate(v.payout, v.totalBet);
       else if (net < 0) sfx.lose();
     }
   }
 
-  async function act(action) {
+  async function act(action, body) {
     if (busy) return;
     busy = true;
     setControls(null);
     sfx.click();
     try {
       const isDeal = action === 'deal';
-      const v = await ctx.post(`/api/games/blackjack/${action}`, isDeal ? { bet: bet.value } : {});
+      const v = await ctx.post(`/api/games/blackjack/${action}`, isDeal ? { bet: bet.value } : body || {});
       if (!alive) return;
       if (v.finished) ctx.setBalance(v.balance - v.payout);
       else ctx.setBalance(v.balance);
@@ -142,10 +153,16 @@ export default async function mount(root, ctx) {
 
   dealBtn.addEventListener('click', () => act('deal'));
   for (const [a, b] of Object.entries(actions)) b.addEventListener('click', () => act(a));
+  insureEl.querySelectorAll('[data-ins]').forEach((b) => b.addEventListener('click', () => act('insurance', { take: b.dataset.ins === '1' })));
   const keys = { h: 'hit', s: 'stand', d: 'double', p: 'split' };
   const onKey = (e) => {
     if (/INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName)) return;
-    const a = keys[e.key.toLowerCase()];
+    const k = e.key.toLowerCase();
+    if (!insureEl.classList.contains('hidden')) {
+      if (k === 'y' || k === 'n') insureEl.querySelector(`[data-ins="${k === 'y' ? 1 : 0}"]`).click();
+      return;
+    }
+    const a = keys[k];
     if (a && !actions[a].disabled) act(a);
     if ((e.code === 'Space' || e.key === 'Enter') && !dealBtn.classList.contains('hidden') && !dealBtn.disabled && document.activeElement?.tagName !== 'BUTTON') {
       e.preventDefault();

@@ -385,7 +385,7 @@ const bjtable = require('./bjtable');
 app.get('/api/table/blackjack', handle((req) => { const v = viewer(req, 'bjtable'); return { ...bjtable.view(v?.id), balance: v?.balance ?? null }; }));
 app.post('/api/table/blackjack/:action', handle((req) => {
   const a = req.params.action;
-  if (!['sit', 'leave', 'bet', 'act'].includes(a)) throw new GameError('Unbekannte Aktion.', 404);
+  if (!['sit', 'leave', 'bet', 'act', 'insure'].includes(a)) throw new GameError('Unbekannte Aktion.', 404);
   const p = me(req);
   live.touch(p, 'bjtable');
   return { ...bjtable[a](p, req.body || {}), balance: p.balance };

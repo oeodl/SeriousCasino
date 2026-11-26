@@ -160,3 +160,28 @@ body.chat-open .chat-drawer { transform: none; }
 .bjt-res.neg { color: #ff7b7b; }
 .bjt-res.pos { color: #5ee08f; }
 .bjt-res.muted { color: #d6dde6; }
+
+/* Blackjack-Tisch: mehrere Hände (Teilen), Versicherung */
+.bjt-seat { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 6px; border-radius: 14px; transition: border-color .2s, box-shadow .2s, background .2s; }
+.bjt-seat.won { background: rgba(46, 204, 113, .08); }
+.bjt-seat.lost { background: rgba(0, 0, 0, .12); }
+.bjt-hands { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+.bjt-hand { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 4px; border-radius: 10px; border: 2px solid transparent; transition: border-color .2s; }
+.bjt-hand.cur { border-color: var(--gold); background: rgba(0, 0, 0, .18); }
+.bjt-hand.res-neg .card { filter: brightness(.65); }
+.bjt-hand-val { display: flex; gap: 4px; align-items: center; font-size: .78rem; }
+.bjt-hand-val small { color: var(--muted); }
+.bjt-hand-res { font-size: .7rem; font-weight: 800; }
+.bjt-hand-res.pos { color: #5ee08f; }
+.bjt-hand-res.neg { color: #ff7b7b; }
+.bjt-hand-res.muted { color: #d6dde6; }
+.bjt-ins { font-size: .75rem; color: #9fd3ff; }
+.bjt-wait { font-size: .72rem; color: #d8efe0; opacity: .85; }
+.bjt-seat .bj-hand-info { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: center; font-size: .85rem; }
+.bjt-hands .bjt-hand + .bjt-hand .card { --cw: 40px; }
+.bjt-seat:has(.bjt-hand + .bjt-hand) .card { --cw: 38px; }
+.bjt-seat:has(.bjt-hand + .bjt-hand) .bj-cards .card + .card { margin-left: -22px; }
+.bj-insure { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 12px; border: 1px solid rgba(227, 179, 65, .45); background: rgba(227, 179, 65, .08); animation: winPop .3s ease; }
+.bj-insure-q { font-size: .9rem; line-height: 1.45; }
+.bj-insure .row { gap: 8px; }
+.bj-insure .btn { flex: 1; }
