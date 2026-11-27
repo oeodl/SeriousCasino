@@ -3,6 +3,7 @@
 // → jeder Spieler ist nacheinander dran (20 s pro Hand, sonst "Halten") → Dealer zieht bis 17 → Auszahlung → neue Runde.
 // Blackjack 3:2, Verdoppeln auf 2 Karten (auch nach Teilen), Teilen bis 4 Hände (geteilte Asse: je eine Karte),
 // Versicherung kostet den halben Einsatz und zahlt 2:1, wenn der Dealer Blackjack hat.
+// Ein Spieler darf mehrere Plätze belegen – jeder Platz spielt wie ein eigener Spieler (eigener Einsatz, eigene Hände).
 const crypto = require('crypto');
 const db = require('./db');
 const profiles = require('./profiles');
@@ -22,11 +23,14 @@ let T = null;
 const pending = () => (db.get().bjtablePending ||= {});
 const staked = (s) => (s.hands.length ? s.hands.reduce((a, h) => a + h.bet, 0) : s.bet) + (s.insurance || 0);
 const inRound = (s) => s && s.hands.length > 0;
-function syncPending(s) { const v = staked(s); if (v > 0) pending()[s.pid] = v; else delete pending()[s.pid]; }
+// Offene Einsätze pro Platz (Schlüssel "Spieler-ID#Platz"), damit sie nach einem Neustart zurückgezahlt werden
+const pkey = (s) => `${s.pid}#${T.seats.indexOf(s)}`;
+function syncPending(s) { const v = staked(s); const k = pkey(s); if (v > 0) pending()[k] = v; else delete pending()[k]; }
+const seatsOf = (pid) => T.seats.map((s, i) => (s && s.pid === pid ? i : -1)).filter((i) => i >= 0);
 const prof = (pid) => db.get().profiles[pid];
 
 function refundAfterRestart() {
-  for (const [pid, amount] of Object.entries(pending())) { const p = prof(pid); if (p) p.balance += amount; }
+  for (const [key, amount] of Object.entries(pending())) { const p = prof(key.split('#')[0]); if (p) p.balance += amount; }
   db.get().bjtablePending = {};
   db.save();
 }
@@ -138,7 +142,7 @@ function settle(now) {
       p.balance += pay;
       profiles.record(p, 'bjtable', staked(s), pay, `Blackjack-Tisch: ${parts.join(' / ')} vs ${dBJ ? 'BJ' : d}${s.insurance ? ` · Versicherung ${dBJ ? 'gewonnen' : 'verloren'}` : ''}`);
     }
-    delete pending()[s.pid];
+    delete pending()[pkey(s)];
   }
   T.phase = 'result';
   T.until = now + RESULT_MS;
@@ -187,34 +191,54 @@ function view(viewerId) {
       };
     }),
     mySeat: T.seats.findIndex((s) => s && s.pid === viewerId),
+    mySeats: viewerId ? seatsOf(viewerId) : [],
   };
 }
 
+function seatArg(body) {
+  const i = Number(body?.seat);
+  return Number.isInteger(i) && i >= 0 && i < SEATS ? i : null;
+}
+
+/** Platz nehmen – auch einen weiteren, wenn man schon sitzt */
 function sit(p, body) {
   tick();
-  if (T.seats.some((s) => s && s.pid === p.id)) throw new GameError('Du sitzt schon am Tisch.');
-  const i = Number(body.seat);
-  const idx = Number.isInteger(i) && i >= 0 && i < SEATS && !T.seats[i] ? i : T.seats.findIndex((s) => !s);
+  const want = seatArg(body);
+  const idx = want !== null && !T.seats[want] ? want : T.seats.findIndex((s) => !s);
   if (idx < 0) throw new GameError('Der Tisch ist voll.');
+  if (want !== null && T.seats[want]) throw new GameError('Dieser Platz ist schon besetzt.');
   T.seats[idx] = { pid: p.id, name: p.name, bet: 0, hands: [], cur: 0, insurance: 0, insDecided: false, payout: null, idle: 0 };
   return view(p.id);
 }
 
-function leave(p) {
-  const i = T.seats.findIndex((s) => s && s.pid === p.id);
-  if (i < 0) throw new GameError('Du sitzt nicht am Tisch.');
-  const s = T.seats[i];
-  if (inRound(s) && T.phase !== 'result') throw new GameError('Erst die laufende Runde zu Ende spielen.');
-  if (s.bet > 0 && T.phase === 'betting') { p.balance += s.bet; delete pending()[p.id]; }
-  T.seats[i] = null;
+/** Einen Platz verlassen (seat angegeben) oder alle eigenen Plätze */
+function leave(p, body) {
+  const want = seatArg(body);
+  const mine = seatsOf(p.id);
+  if (!mine.length) throw new GameError('Du sitzt nicht am Tisch.');
+  const list = want !== null ? mine.filter((i) => i === want) : mine;
+  if (!list.length) throw new GameError('Das ist nicht dein Platz.');
+  if (list.some((i) => inRound(T.seats[i])) && T.phase !== 'result') throw new GameError('Erst die laufende Runde zu Ende spielen.');
+  for (const i of list) {
+    const s = T.seats[i];
+    if (s.bet > 0 && T.phase === 'betting') { p.balance += s.bet; delete pending()[pkey(s)]; }
+    T.seats[i] = null;
+  }
   return view(p.id);
 }
 
 function bet(p, body) {
   tick();
   if (T.phase !== 'betting') throw new GameError('Gerade läuft eine Runde – gleich geht es weiter.');
-  let s = T.seats.find((x) => x && x.pid === p.id);
-  if (!s) { sit(p, {}); s = T.seats.find((x) => x && x.pid === p.id); }
+  const want = seatArg(body);
+  let i = want !== null ? want : seatsOf(p.id)[0];
+  if (i === undefined || i === null || !T.seats[i]) {
+    // Noch kein (bzw. dieser) Platz → hinsetzen
+    sit(p, want !== null ? { seat: want } : {});
+    i = want !== null ? want : seatsOf(p.id)[0];
+  }
+  const s = T.seats[i];
+  if (s.pid !== p.id) throw new GameError('Das ist nicht dein Platz.');
   const amount = Number(body.amount);
   if (!Number.isInteger(amount) || amount < 1) throw new GameError('Ungültiger Einsatz.');
   checkMaxBet(s.bet + amount);
@@ -223,17 +247,20 @@ function bet(p, body) {
   s.bet += amount;
   syncPending(s);
   if (!T.until) T.until = Date.now() + BET_MS;
-  // Haben alle am Tisch gesetzt? Dann früher los (allein 6 s, damit noch jemand dazukommen kann)
-  const seated = T.seats.filter(Boolean).length;
-  if (T.seats.every((x) => !x || x.bet > 0)) T.until = Math.min(T.until, Date.now() + (seated > 1 ? 3000 : 6000));
+  // Haben alle Plätze gesetzt? Dann früher los (allein 6 s, damit noch jemand dazukommen kann)
+  const players = new Set(T.seats.filter(Boolean).map((x) => x.pid)).size;
+  if (T.seats.every((x) => !x || x.bet > 0)) T.until = Math.min(T.until, Date.now() + (players > 1 ? 3000 : 6000));
   return view(p.id);
 }
 
 function insure(p, body) {
   tick();
-  const s = T.seats.find((x) => x && x.pid === p.id);
-  if (T.phase !== 'insurance' || !inRound(s)) throw new GameError('Versicherung ist gerade nicht möglich.');
-  if (s.insDecided) throw new GameError('Du hast dich schon entschieden.');
+  if (T.phase !== 'insurance') throw new GameError('Versicherung ist gerade nicht möglich.');
+  const want = seatArg(body);
+  const i = want !== null ? want : seatsOf(p.id).find((k) => inRound(T.seats[k]) && !T.seats[k].insDecided);
+  const s = i === undefined ? null : T.seats[i];
+  if (!s || s.pid !== p.id || !inRound(s)) throw new GameError('Versicherung ist gerade nicht möglich.');
+  if (s.insDecided) throw new GameError('Für diesen Platz hast du dich schon entschieden.');
   if (body.take) {
     const cost = Math.floor(s.hands[0].bet / 2);
     if (cost < 1) throw new GameError('Der Einsatz ist zu klein für eine Versicherung.');

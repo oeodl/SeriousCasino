@@ -1,5 +1,6 @@
 // Multiplayer-Blackjack – bis zu 5 Spieler an einem Tisch gegen denselben Dealer.
 // Mit Teilen (bis 4 Hände) und Versicherung, wenn der Dealer ein Ass zeigt.
+// Man kann mehrere Plätze gleichzeitig belegen – jeder Platz hat eigenen Einsatz und eigene Hände.
 import { h, esc, fmt, celebrate, cardEl } from '../ui.js';
 import { sfx } from '../sound.js';
 
@@ -24,7 +25,7 @@ export default async function mount(root, ctx) {
         <button class="btn" data-a="split">Teilen <small>(P)</small></button>
       </div>
       <button class="btn btn-sm leave-btn hidden">Tisch verlassen</button>
-      <p class="muted" style="margin:0;font-size:.8rem;line-height:1.5">Bis zu 5 Spieler, ein Dealer. Wenn der erste setzt, läuft die Wettphase 15 s. Zeigt der Dealer ein Ass, kann sich jeder 10 s lang versichern. Danach ist jeder der Reihe nach dran (20 s pro Hand, sonst wird gehalten). Blackjack zahlt 3:2, Teilen bis 4 Hände, Dealer steht auf 17.</p>
+      <p class="muted" style="margin:0;font-size:.8rem;line-height:1.5">Bis zu 5 Plätze, ein Dealer – du kannst auch mehrere Plätze belegen. Wenn der erste setzt, läuft die Wettphase 15 s. Zeigt der Dealer ein Ass, kann sich jeder 10 s lang versichern. Danach ist jeder der Reihe nach dran (20 s pro Hand, sonst wird gehalten). Blackjack zahlt 3:2, Teilen bis 4 Hände, Dealer steht auf 17.</p>
     </div>
     <div class="game-stage">
       <div class="bjt-wrap"><div class="felt bj-table bjt-table">
@@ -52,12 +53,26 @@ export default async function mount(root, ctx) {
     try { const s = await ctx.post(path, body); busy = false; onState(s); return s; } catch (e) { busy = false; ctx.toast(e.message, 'err'); }
   }
 
-  betBtn.addEventListener('click', async () => { if (await post('/api/table/blackjack/bet', { amount: amount.value })) sfx.chip(); });
+  betBtn.addEventListener('click', async () => {
+    const mine = (st?.mySeats || []).map((i) => st.seats[i]).filter(Boolean);
+    if (mine.length <= 1) { if (await post('/api/table/blackjack/bet', { amount: amount.value, seat: mine[0]?.seat })) sfx.chip(); return; }
+    // Mehrere Plätze: auf alle ohne Einsatz setzen – haben alle schon, auf alle nachlegen
+    const targets = mine.some((x) => !x.bet) ? mine.filter((x) => !x.bet) : mine;
+    let ok = false;
+    for (const x of targets) { if (await post('/api/table/blackjack/bet', { amount: amount.value, seat: x.seat })) ok = true; else break; }
+    if (ok) sfx.chip();
+  });
   leaveBtn.addEventListener('click', () => post('/api/table/blackjack/leave'));
-  seatsEl.addEventListener('click', (e) => { const b = e.target.closest('[data-sit]'); if (b) post('/api/table/blackjack/sit', { seat: Number(b.dataset.sit) }); });
+  seatsEl.addEventListener('click', async (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    if (b.dataset.sit !== undefined) post('/api/table/blackjack/sit', { seat: Number(b.dataset.sit) });
+    else if (b.dataset.betseat !== undefined) { if (await post('/api/table/blackjack/bet', { amount: amount.value, seat: Number(b.dataset.betseat) })) sfx.chip(); }
+    else if (b.dataset.leaveseat !== undefined) post('/api/table/blackjack/leave', { seat: Number(b.dataset.leaveseat) });
+  });
   actBtns.forEach((b) => b.addEventListener('click', () => { sfx.click(); post('/api/table/blackjack/act', { action: b.dataset.a }); }));
   insureEl.querySelectorAll('[data-ins]').forEach((b) => b.addEventListener('click', async () => {
-    if (await post('/api/table/blackjack/insure', { take: b.dataset.ins === '1' }) && b.dataset.ins === '1') sfx.chip();
+    if (await post('/api/table/blackjack/insure', { take: b.dataset.ins === '1', seat: insureSeat() }) && b.dataset.ins === '1') sfx.chip();
   }));
   const onKey = (e) => {
     if (e.target.matches('input, textarea')) return;
@@ -91,13 +106,14 @@ export default async function mount(root, ctx) {
   // Plätze nur neu zeichnen, wenn sich dort wirklich etwas geändert hat –
   // sonst würden Animationen (Karten, Ergebnis-Schild, Zeitbalken) bei jeder Abfrage neu starten.
   function seatKey(s, seat, i) {
-    if (!seat) return `empty|${s.mySeat < 0 && ['betting', 'result'].includes(s.phase)}`;
-    return JSON.stringify([seat, s.turn === i && s.phase === 'playing' ? `turn${seat.cur}` : '', s.phase === 'insurance' && !seat.insDecided]);
+    if (!seat) return `empty|${canSit(s)}|${(s.mySeats || []).length > 0}`;
+    return JSON.stringify([seat, s.turn === i && s.phase === 'playing' ? `turn${seat.cur}` : '', s.phase === 'insurance' && !seat.insDecided, s.phase === 'betting' || s.phase === 'result', amount.value, (s.mySeats || []).length]);
   }
 
   function seatEl(s, seat, i) {
     if (!seat) {
-      return h(`<div class="bjt-seat empty">${s.mySeat < 0 && ['betting', 'result'].includes(s.phase) ? `<button class="btn btn-sm" data-sit="${i}">Platz ${i + 1} nehmen</button>` : `<span class="muted">Platz ${i + 1} frei</span>`}</div>`);
+      const more = (s.mySeats || []).length > 0;
+      return h(`<div class="bjt-seat empty">${canSit(s) ? `<button class="btn btn-sm" data-sit="${i}" title="${more ? 'Zusätzlichen Platz belegen' : ''}">${more ? `+ Platz ${i + 1}` : `Platz ${i + 1} nehmen`}</button>` : `<span class="muted">Platz ${i + 1} frei</span>`}</div>`);
     }
     const turn = s.turn === i && s.phase === 'playing';
     const prev = shownSeat[i] || [];
@@ -105,7 +121,9 @@ export default async function mount(root, ctx) {
     const box = h(`<div class="bjt-seat ${turn ? 'active' : ''} ${seat.me ? 'me' : ''} ${net === null ? '' : net > 0 ? 'won' : net < 0 ? 'lost' : ''}">
       <div class="bjt-hands"></div>
       <div class="bj-hand-info">${seat.bet ? `<span class="lc-bet"><span class="chip-icon"></span>${fmt(seat.bet)}</span>` : '<span class="muted">kein Einsatz</span>'}${seat.insurance ? `<span class="bjt-ins" title="Versicherung">🛡️ ${fmt(seat.insurance)}</span>` : ''}</div>
-      <div class="bjt-name">${esc(seat.name)}${seat.me ? ' <small class="gold">(du)</small>' : ''}</div>
+      <div class="bjt-name">${seat.me && (s.mySeats || []).length > 1 ? `<span class="gold">Du · Platz ${i + 1}</span>` : `${esc(seat.name)}${seat.me ? ' <small class="gold">(du)</small>' : ''}`}</div>
+      ${seat.me && s.phase === 'betting' ? `<div class="bjt-seat-tools"><button class="btn btn-sm btn-gold" data-betseat="${i}" title="Einsatz auf diesen Platz">+${fmt(amount.value)}</button>${!seat.bet ? `<button class="btn btn-sm btn-ghost" data-leaveseat="${i}" title="Platz freigeben">✕</button>` : ''}</div>` : ''}
+      ${seat.me && s.phase === 'result' && (s.mySeats || []).length > 1 ? `<button class="btn btn-sm btn-ghost bjt-free" data-leaveseat="${i}">Platz freigeben</button>` : ''}
       ${s.phase === 'insurance' && seat.hands.length ? `<div class="bjt-wait">${seat.insDecided ? (seat.insurance ? 'versichert' : 'keine Versicherung') : 'überlegt …'}</div>` : ''}
       ${turn ? `<div class="bjt-timer"><i style="animation-duration:${s.timeLeft}ms"></i></div>` : ''}
       ${net !== null ? `<div class="bjt-res ${net > 0 ? 'pos' : net < 0 ? 'neg' : 'muted'}">${net > 0 ? '+' + fmt(net) : net < 0 ? '−' + fmt(-net) : '±0'}${seat.insPaid ? ' · 🛡️ zahlt' : ''}</div>` : ''}
@@ -127,6 +145,9 @@ export default async function mount(root, ctx) {
     return box;
   }
 
+  const canSit = (s) => ['betting', 'result'].includes(s.phase);
+  const insureSeat = () => (st?.mySeats || []).find((i) => st.seats[i]?.hands.length && !st.seats[i].insDecided);
+
   function paintSeats(s) {
     if (seatsEl.children.length !== s.seats.length) { seatsEl.replaceChildren(...s.seats.map(() => document.createElement('div'))); seatKeys = []; }
     s.seats.forEach((seat, i) => {
@@ -146,8 +167,9 @@ export default async function mount(root, ctx) {
       if (s.phase === 'betting') { msg.className = 'result-msg'; msg.textContent = ''; }
       dealerReveal = s.phase === 'dealer' ? Date.now() - (s.dealer.cards.length - 1) * s.dealerStepMs + s.timeLeft : null;
       if (s.phase === 'result') {
-        const me = s.seats[s.mySeat];
-        if (me?.payout !== null && me?.payout !== undefined) {
+        const mine = (s.mySeats || []).map((i) => s.seats[i]).filter((x) => x && x.payout !== null && x.payout !== undefined);
+        const me = mine.length ? { bet: mine.reduce((a, x) => a + x.bet, 0), insurance: mine.reduce((a, x) => a + x.insurance, 0), payout: mine.reduce((a, x) => a + x.payout, 0), insPaid: mine.reduce((a, x) => a + x.insPaid, 0) } : null;
+        if (me) {
           const staked = me.bet + me.insurance;
           const net = me.payout - staked;
           msg.className = 'result-msg ' + (net > 0 ? 'win' : net < 0 ? 'lose' : 'push');
@@ -157,8 +179,8 @@ export default async function mount(root, ctx) {
         }
       }
       if (lastPhase === 'insurance' && s.phase === 'playing') {
-        const me = s.seats[s.mySeat];
-        if (me?.insurance) { msg.className = 'result-msg lose'; msg.textContent = 'Dealer hat keinen Blackjack – Versicherung verloren'; }
+        const me = { insurance: (s.mySeats || []).reduce((a, i) => a + (s.seats[i]?.insurance || 0), 0) };
+        if (me.insurance) { msg.className = 'result-msg lose'; msg.textContent = 'Dealer hat keinen Blackjack – Versicherung verloren'; }
       }
     }
     lastRound = s.round;
@@ -167,28 +189,31 @@ export default async function mount(root, ctx) {
 
     const secs = s.timeLeft !== null ? Math.ceil(s.timeLeft / 1000) : null;
     const turnSeat = s.turn >= 0 ? s.seats[s.turn] : null;
-    const meSeat = s.seats[s.mySeat];
+    const mySeats = (s.mySeats || []).map((i) => s.seats[i]).filter(Boolean);
+    const meSeat = turnSeat?.me ? turnSeat : mySeats[0];
     phaseEl.innerHTML = s.phase === 'betting'
       ? (secs !== null ? `<span class="pos">Einsätze</span> – noch <b>${secs} s</b>` : s.seats.some(Boolean) ? 'Warte auf den ersten Einsatz …' : 'Setz dich an den Tisch!')
       : s.phase === 'insurance' ? `🛡️ Versicherung? – noch <b>${secs} s</b>`
-        : s.phase === 'playing' ? (turnSeat?.me ? `<span class="gold">Du bist dran${turnSeat.hands.length > 1 ? ` (Hand ${turnSeat.cur + 1}/${turnSeat.hands.length})` : ''}!</span> (${secs} s)` : `${esc(turnSeat?.name || '')} ist dran …`)
+        : s.phase === 'playing' ? (turnSeat?.me ? `<span class="gold">Du bist dran${mySeats.length > 1 ? ` – Platz ${s.turn + 1}` : ''}${turnSeat.hands.length > 1 ? ` (Hand ${turnSeat.cur + 1}/${turnSeat.hands.length})` : ''}!</span> (${secs} s)` : `${esc(turnSeat?.name || '')} ist dran …`)
           : s.phase === 'dealer' ? 'Dealer zieht …' : `Nächste Runde in ${secs} s`;
 
     paintDealer(s);
     paintSeats(s);
-    const myTurn = s.phase === 'playing' && s.turn === s.mySeat && s.mySeat >= 0;
-    const insuring = s.phase === 'insurance' && meSeat?.hands.length > 0 && !meSeat.insDecided;
+    const myTurn = s.phase === 'playing' && !!turnSeat?.me;
+    const insSeatIdx = s.phase === 'insurance' ? (s.mySeats || []).find((i) => s.seats[i]?.hands.length && !s.seats[i].insDecided) : undefined;
+    const insuring = insSeatIdx !== undefined;
     insureEl.classList.toggle('hidden', !insuring);
     actionsEl.classList.toggle('hidden', insuring);
-    if (insuring) insureEl.querySelector('.ins-cost').textContent = fmt(Math.floor(meSeat.hands[0].bet / 2));
+    if (insuring) insureEl.querySelector('.ins-cost').textContent = fmt(Math.floor(s.seats[insSeatIdx].hands[0].bet / 2)) + (mySeats.length > 1 ? ' (Platz ' + (insSeatIdx + 1) + ')' : '');
     insureEl.querySelectorAll('button').forEach((b) => (b.disabled = busy));
     actBtns.forEach((b) => {
       const a = b.dataset.a;
       b.disabled = busy || !myTurn || (a === 'double' && !meSeat?.canDouble) || (a === 'split' && !meSeat?.canSplit);
     });
     betBtn.disabled = busy || s.phase !== 'betting';
-    betBtn.textContent = meSeat?.bet && s.phase === 'betting' ? 'NACHLEGEN' : 'EINSATZ SETZEN';
-    leaveBtn.classList.toggle('hidden', s.mySeat < 0 || (meSeat?.hands.length > 0 && s.phase !== 'result'));
+    betBtn.textContent = mySeats.length > 1 ? (s.phase === 'betting' && !mySeats.some((x) => !x.bet) ? 'ÜBERALL NACHLEGEN' : 'AUF ALLE PLÄTZE SETZEN') : mySeats[0]?.bet && s.phase === 'betting' ? 'NACHLEGEN' : 'EINSATZ SETZEN';
+    leaveBtn.textContent = mySeats.length > 1 ? 'Alle Plätze verlassen' : 'Tisch verlassen';
+    leaveBtn.classList.toggle('hidden', !mySeats.length || (mySeats.some((x) => x.hands.length > 0) && s.phase !== 'result'));
   }
 
   async function poll() {

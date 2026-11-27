@@ -208,3 +208,8 @@ body.chat-open .chat-drawer { transform: none; }
 .auto-status { font-size: .78rem; margin-top: 6px; line-height: 1.5; }
 .auto-status:empty { display: none; }
 @media (max-width: 420px) { .auto-grid { grid-template-columns: 1fr 1fr; } .auto-grid .lbl:first-child { grid-column: 1 / -1; } }
+
+/* Blackjack-Tisch: mehrere Plätze pro Spieler */
+.bjt-seat-tools { display: flex; gap: 4px; }
+.bjt-seat-tools .btn { padding: 3px 8px; font-size: .75rem; }
+.bjt-free { padding: 2px 8px; font-size: .7rem; }
