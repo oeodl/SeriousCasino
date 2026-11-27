@@ -250,6 +250,8 @@ export async function admin(root, ctx) {
       </div>
       <p class="muted" style="margin:8px 0 0;font-size:.8rem">Der Jackpot-Gewinner muss in der Runde eingezahlt haben, sonst wird normal gezogen.</p>
     </div>
+    <div class="panel section bja-admin"><h2>🃏 Live-Blackjack-Tisch</h2><div class="bja-seats"></div>
+      <p class="muted" style="margin:8px 0 0;font-size:.8rem">„Rausnehmen“ gibt den Platz frei. Noch nicht abgerechnete Einsätze bekommt der Spieler zurück. Wer den Tisch 90 s nicht mehr offen hat, wird zwischen den Runden automatisch entfernt.</p></div>
     <div class="panel section"><h2>🟢 Gerade online</h2><div class="lca-online"></div></div>`);
     const lraState = body.querySelector('.lra-state');
     const lrLoop = async () => {
@@ -269,6 +271,33 @@ export async function admin(root, ctx) {
     body.querySelectorAll('[data-jp]').forEach((b) => b.addEventListener('click', async () => {
       try { await adminApi('POST', '/api/admin/jackpot/rig', b.dataset.jp === 'clear' ? { clear: true } : { name: body.querySelector('.jpa-name').value }); toast('Erledigt.', 'ok'); } catch (e) { toast(e.message, 'err'); }
     }));
+    // Live-Blackjack: Plätze ansehen & Spieler rausnehmen
+    const bjaSeats = body.querySelector('.bja-seats');
+    const PH = { betting: 'Einsätze', insurance: 'Versicherung', playing: 'Runde läuft', dealer: 'Dealer zieht', result: 'Ergebnis' };
+    const paintBja = (t) => {
+      const seats = t.seats.filter(Boolean);
+      bjaSeats.innerHTML = `<div class="kv"><span>Phase</span><span>${PH[t.phase] || esc(t.phase)}</span></div>` + (seats.length
+        ? seats.map((s) => `<div class="kv"><span>Platz ${s.seat + 1}: <b>${esc(s.name)}</b> <span class="muted">${s.bet ? `· Einsatz ${fmt(s.bet)}` : ''}${s.absentSec > 5 ? ` · seit ${s.absentSec} s weg` : ''}</span></span>
+            <button class="btn btn-sm btn-red" data-kick="${s.seat}">Rausnehmen</button></div>`).join('')
+        : '<p class="muted" style="margin:6px 0 0">Niemand am Tisch.</p>');
+    };
+    const bjaLoop = async () => {
+      if (!alive || !body.contains(bjaSeats)) return;
+      try { paintBja(await adminApi('GET', '/api/admin/bjtable')); } catch { /* egal */ }
+      setTimeout(bjaLoop, 2000);
+    };
+    bjaLoop();
+    bjaSeats.addEventListener('click', async (e) => {
+      const b = e.target.closest('[data-kick]');
+      if (!b) return;
+      b.disabled = true;
+      try {
+        const r = await adminApi('POST', '/api/admin/bjtable/kick', { seat: Number(b.dataset.kick) });
+        paintBja(r);
+        toast(`${r.kicked} wurde vom Tisch genommen${r.refund ? ` (${fmt(r.refund)} Chips zurück)` : ''}.`, 'ok');
+      } catch (err) { toast(err.message, 'err'); b.disabled = false; }
+    });
+
     const lcaState = body.querySelector('.lca-state');
     const lcaOnline = body.querySelector('.lca-online');
     const paintLc = (s) => {

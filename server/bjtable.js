@@ -9,6 +9,7 @@ const db = require('./db');
 const profiles = require('./profiles');
 const { makeDeck, GameError, checkMaxBet } = require('./util');
 
+const ABSENT_MS = 90000; // wer den Tisch so lange nicht mehr offen hat, verliert seinen Platz (nur zwischen den Runden)
 const SEATS = 5, BET_MS = 15000, TURN_MS = 20000, INS_MS = 10000, DEALER_STEP_MS = 900, RESULT_MS = 7000, MAX_HANDS = 4;
 const val = (c) => (c.r === 14 ? 11 : c.r >= 10 ? 10 : c.r);
 function total(cards) {
@@ -149,9 +150,32 @@ function settle(now) {
   db.save();
 }
 
+/** Platz räumen; noch offene (nicht abgerechnete) Einsätze gehen an den Spieler zurück */
+function clearSeat(i, now = Date.now()) {
+  const s = T.seats[i];
+  if (!s) return 0;
+  const refund = pending()[pkey(s)] || 0;
+  const p = prof(s.pid);
+  if (refund && p) p.balance += refund;
+  delete pending()[pkey(s)];
+  T.seats[i] = null;
+  // War der Platz gerade dran bzw. fehlte nur noch seine Versicherungs-Antwort: weiterspielen
+  if (T.phase === 'playing' && T.turn === i) nextTurn(now);
+  else if (T.phase === 'insurance' && T.seats.every((x) => !inRound(x) || x.insDecided)) resolveInsurance(now);
+  if (!T.seats.some((x) => x && x.bet > 0) && T.phase === 'betting') T.until = null;
+  db.save();
+  return refund;
+}
+
+/** Zwischen den Runden: Plätze von Spielern freigeben, die den Tisch nicht mehr offen haben */
+function dropAbsent(now) {
+  T.seats.forEach((s, i) => { if (s && now - (s.seen || 0) > ABSENT_MS) clearSeat(i, now); });
+}
+
 function tick() {
   if (!T) return;
   const now = Date.now();
+  if (T.phase === 'betting') dropAbsent(now);
   if (T.phase === 'betting' && T.until && now >= T.until) deal(now);
   else if (T.phase === 'insurance' && now >= T.until) resolveInsurance(now); // keine Antwort = keine Versicherung
   else if (T.phase === 'playing' && T.turn >= 0 && now >= T.until) { // Zeit um → aktuelle Hand hält
@@ -172,8 +196,9 @@ function canDouble(s, p) {
 }
 
 function view(viewerId) {
-  tick();
   const now = Date.now();
+  if (viewerId) T.seats.forEach((s) => { if (s && s.pid === viewerId) s.seen = now; }); // Tisch ist noch offen
+  tick();
   const hide = ['betting', 'insurance', 'playing'].includes(T.phase);
   const viewer = viewerId ? prof(viewerId) : null;
   return {
@@ -207,7 +232,7 @@ function sit(p, body) {
   const idx = want !== null && !T.seats[want] ? want : T.seats.findIndex((s) => !s);
   if (idx < 0) throw new GameError('Der Tisch ist voll.');
   if (want !== null && T.seats[want]) throw new GameError('Dieser Platz ist schon besetzt.');
-  T.seats[idx] = { pid: p.id, name: p.name, bet: 0, hands: [], cur: 0, insurance: 0, insDecided: false, payout: null, idle: 0 };
+  T.seats[idx] = { pid: p.id, name: p.name, bet: 0, hands: [], cur: 0, insurance: 0, insDecided: false, payout: null, idle: 0, seen: Date.now() };
   return view(p.id);
 }
 
@@ -310,5 +335,20 @@ function act(p, body) {
   return view(p.id);
 }
 
-module.exports = { start, view, sit, leave, bet, act, insure };
+// ---------- Admin ----------
+function adminState() {
+  return {
+    phase: T.phase,
+    seats: T.seats.map((s, i) => (s ? { seat: i, name: s.name, bet: staked(s), inRound: inRound(s), absentSec: Math.round((Date.now() - (s.seen || 0)) / 1000) } : null)),
+  };
+}
+function adminKick(body) {
+  const i = seatArg(body);
+  if (i === null || !T.seats[i]) throw new GameError('Auf diesem Platz sitzt niemand.');
+  const name = T.seats[i].name;
+  const refund = clearSeat(i);
+  return { ...adminState(), kicked: name, refund };
+}
+
+module.exports = { start, view, sit, leave, bet, act, insure, adminState, adminKick };
 module.exports._internal = { total, isBJ };
