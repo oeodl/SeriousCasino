@@ -106,9 +106,9 @@ export function betControl({ game, getBalance, min = 1, initial = 100, label = '
   const el = h(`<label class="field">${esc(label)}
     <div class="bet-row">
       <input class="input" type="number" inputmode="numeric" min="${min}" max="${MAX_BET}" step="1">
-      <button class="btn btn-sm" type="button" data-a="half">½</button>
-      <button class="btn btn-sm" type="button" data-a="double">2×</button>
-      <button class="btn btn-sm" type="button" data-a="max">Max</button>
+      <button class="btn btn-sm" type="button" data-bq="half">½</button>
+      <button class="btn btn-sm" type="button" data-bq="double">2×</button>
+      <button class="btn btn-sm" type="button" data-bq="max">Max</button>
     </div></label>`);
   const input = el.querySelector('input');
   const clamp = (v) => {
@@ -121,13 +121,13 @@ export function betControl({ game, getBalance, min = 1, initial = 100, label = '
     try { localStorage.setItem(key, input.value); } catch { /* egal */ }
     api.onChange?.(api.value);
   };
-  el.querySelectorAll('[data-a]').forEach((b) => b.addEventListener('click', (e) => {
+  el.querySelectorAll('[data-bq]').forEach((b) => b.addEventListener('click', (e) => {
     e.preventDefault();
     sfx.chip();
     const v = Number(input.value) || min;
-    if (b.dataset.a === 'half') set(Math.floor(v / 2));
-    if (b.dataset.a === 'double') set(v * 2);
-    if (b.dataset.a === 'max') set(getBalance());
+    if (b.dataset.bq === 'half') set(Math.floor(v / 2));
+    if (b.dataset.bq === 'double') set(v * 2);
+    if (b.dataset.bq === 'max') set(getBalance());
   }));
   input.addEventListener('change', () => set(input.value));
   input.addEventListener('input', () => api.onChange?.(Math.floor(Number(input.value) || 0)));

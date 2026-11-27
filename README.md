@@ -133,6 +133,8 @@ Das Profil hat dann wieder 10.000 Chips, Statistik und Verlauf sind gelöscht.
 \* Langfristiger Durchschnitt wie in echten Casinos – auf Dauer gewinnt also das Haus. 😉
 Alle Ergebnisse werden auf dem Server mit einem kryptografischen Zufallsgenerator (`crypto.randomInt`) erzeugt.
 
+**🔁 Autospin:** Bei allen Sofort-Spielen (Slots, Roulette, Würfel, Plinko, Limbo, Keno, Glücksrad, Rubbellos, Sic Bo, Drache & Tiger, Baccarat, Bingo, Pferderennen) gibt es unter dem Spiel-Knopf „Autospin“: Anzahl Runden wählen (oder ∞), optional „Stopp bei Gewinn ab“ / „Stopp bei Verlust ab“ – dann spielt das Casino Runde für Runde mit deinem aktuellen Einsatz, bis du stoppst oder ein Limit erreicht ist.
+
 **Tastenkürzel:** Leertaste = Drehen/Würfeln/Start · Blackjack: H, S, D, P (Versicherung: Y/N) · Video Poker: 1–5 zum Halten · Hi-Lo: ↑ ↓ →.
 
 ## Mit Freunden spielen

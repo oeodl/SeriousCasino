@@ -193,3 +193,18 @@ body.chat-open .chat-drawer { transform: none; }
 /* Admin: Stärke von Glück/Pech */
 .w-strength { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin: 6px 0; font-size: .85rem; }
 .w-strength small { flex-basis: 100%; }
+
+/* Autospin */
+.auto-box { border: 1px solid rgba(255, 255, 255, .1); border-radius: 12px; padding: 8px 12px; background: rgba(0, 0, 0, .15); }
+.auto-box summary { cursor: pointer; font-weight: 700; font-size: .9rem; list-style: none; }
+.auto-box summary::-webkit-details-marker { display: none; }
+.auto-box summary::after { content: ' ▾'; color: var(--muted); }
+.auto-box[open] summary { margin-bottom: 8px; }
+.auto-box.running { border-color: var(--gold); box-shadow: 0 0 14px rgba(227, 179, 65, .25); }
+.auto-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+.auto-grid .lbl { display: flex; flex-direction: column; gap: 4px; font-size: .72rem; }
+.auto-grid .input { padding: 6px 8px; font-size: .85rem; min-width: 0; }
+.auto-btn { width: 100%; }
+.auto-status { font-size: .78rem; margin-top: 6px; line-height: 1.5; }
+.auto-status:empty { display: none; }
+@media (max-width: 420px) { .auto-grid { grid-template-columns: 1fr 1fr; } .auto-grid .lbl:first-child { grid-column: 1 / -1; } }

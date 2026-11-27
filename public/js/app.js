@@ -7,6 +7,7 @@ import { betsPanel } from './bets.js';
 import { initChat } from './chatui.js';
 import { resyncPush } from './push.js';
 import { initUpdateCheck } from './update.js';
+import { AUTO_GAMES, withAutoplay } from './autoplay.js';
 
 export const CATS = [
   { id: 'live', name: 'Live & Multiplayer', icon: '🟢' },
@@ -281,10 +282,12 @@ async function render() {
       });
       const mod = await import(`./games/${game.id}.js`);
       if (state.route !== route) return; // inzwischen weiternavigiert
-      const stop = (await mod.default(root.querySelector('.game-root'), gameCtx)) || null;
+      const auto = AUTO_GAMES.has(game.id) ? withAutoplay(game.id, gameCtx) : null;
+      const stop = (await mod.default(root.querySelector('.game-root'), auto ? auto.ctx : gameCtx)) || null;
+      const stopAuto = auto ? auto.attach(root.querySelector('.game-root')) : null;
       const bets = betsPanel(gameCtx, { game: game.id, GAMES });
       root.querySelector('.game-bets').appendChild(bets.el);
-      state.cleanup = () => { stop?.(); bets.cleanup(); };
+      state.cleanup = () => { stopAuto?.(); stop?.(); bets.cleanup(); };
     } else if (pages[route]) {
       state.cleanup = (await pages[route](appEl, { ...gameCtx, GAMES, CATS, favorites, recent, state, server, live, openProfilePicker, loadMe, logout, cat })) || null;
     } else {

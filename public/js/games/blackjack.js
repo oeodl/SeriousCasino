@@ -45,7 +45,7 @@ export default async function mount(root, ctx) {
   const bet = ctx.bet({ game: 'blackjack', initial: 100 });
   el.querySelector('.bet-slot').appendChild(bet.el);
   const dealBtn = el.querySelector('.deal-btn');
-  const actions = Object.fromEntries([...el.querySelectorAll('[data-a]')].map((b) => [b.dataset.a, b]));
+  const actions = Object.fromEntries([...el.querySelectorAll('.bj-actions [data-a]')].map((b) => [b.dataset.a, b]));
   const dealerCardsEl = el.querySelector('.dealer-cards');
   const dealerVal = el.querySelector('.dealer-val');
   const handsEl = el.querySelector('.bj-hands');

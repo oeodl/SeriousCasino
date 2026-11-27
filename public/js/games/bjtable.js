@@ -41,7 +41,7 @@ export default async function mount(root, ctx) {
   const amount = ctx.bet({ game: 'bjtable', initial: 100, label: 'Einsatz' });
   el.querySelector('.bet-slot').appendChild(amount.el);
   const betBtn = el.querySelector('.bet-btn'), leaveBtn = el.querySelector('.leave-btn');
-  const actBtns = [...el.querySelectorAll('[data-a]')];
+  const actBtns = [...el.querySelectorAll('.bj-actions [data-a]')];
   const actionsEl = el.querySelector('.bj-actions'), insureEl = el.querySelector('.bj-insure');
   const dealerEl = el.querySelector('.dealer-cards'), dealerVal = el.querySelector('.dealer-val');
   const seatsEl = el.querySelector('.bjt-seats'), phaseEl = el.querySelector('.bjt-phase'), msg = el.querySelector('.result-msg');
