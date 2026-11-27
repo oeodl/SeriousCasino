@@ -47,6 +47,7 @@ function list() {
         where: online.get(p.name) || null,
         balance: p.balance,
         luck: L.luckOf(p),
+        strength: L.strengthOf(p),
         next: L.peekNext(p),
         rounds: rounds(p),
         recent: p.history.slice(0, 6).map((h) => ({ game: NAMES[h.game] || h.game, bet: h.bet, payout: h.payout, detail: h.detail, time: h.time })),
@@ -58,9 +59,9 @@ function list() {
 
 function setLuck(body) {
   const p = findP(body.name);
-  L.setLuck(p, String(body.mode));
+  L.setLuck(p, String(body.mode), body.strength);
   db.save();
-  return { name: p.name, luck: L.luckOf(p) };
+  return { name: p.name, luck: L.luckOf(p), strength: L.strengthOf(p) };
 }
 
 /** Eingriff in eine laufende Runde oder Vorgabe für den nächsten Zug */

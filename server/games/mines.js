@@ -64,7 +64,7 @@ function reveal(p, body) {
   if (!Number.isInteger(idx) || idx < 0 || idx >= TILES) throw new GameError('Ungültiges Feld.');
   if (st.revealed.includes(idx)) throw new GameError('Feld ist schon aufgedeckt.');
   // Admin-Steuerung: bei "Pech" liegt unter dem Feld eine Mine, bei "Glück" nie
-  const luck = require('../luck').luckOf(p);
+  const luck = require('../luck').roundLuck(p, st);
   if (luck === 'lose' && !st.positions.includes(idx)) {
     st.positions[0] = idx;
   } else if (luck === 'win' && st.positions.includes(idx)) {

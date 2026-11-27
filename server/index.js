@@ -443,8 +443,9 @@ app.post('/api/games/:game/:action', handle((req) => {
 // (Pech = Spieler verliert Geld, Glück = Spieler gewinnt). Zustand wird zwischen den Versuchen zurückgesetzt.
 const INSTANT = new Set(['slots', 'roulette', 'dice', 'plinko', 'keno', 'limbo', 'wheel', 'scratch', 'cups', 'rps', 'sicbo', 'dragontiger', 'baccarat', 'bingo', 'horses', 'war', 'caseopen']);
 function withLuck(p, game, run) {
-  const mode = require('./luck').luckOf(p);
-  if (mode === 'normal' || !INSTANT.has(game)) return run();
+  if (!INSTANT.has(game)) return run();
+  const mode = require('./luck').luckRoll(p); // je nach eingestellter Stärke greift Glück/Pech nur in manchen Runden
+  if (mode === 'normal') return run();
   const snap = structuredClone({
     balance: p.balance, stats: p.stats, history: p.history, active: p.active,
     vip: p.vip ?? null, quests: p.quests ?? null, achievements: p.achievements ?? null, weekly: p.weekly ?? null, notices: p.notices ?? [], loseStreak: p.loseStreak ?? 0, inventory: p.inventory ?? [],

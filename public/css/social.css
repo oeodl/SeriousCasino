@@ -189,3 +189,7 @@ body.chat-open .chat-drawer { transform: none; }
 /* Hinweis: neue Version verfügbar */
 .update-banner { position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); z-index: 9000; display: flex; gap: 12px; align-items: center; padding: 10px 14px; border-radius: 14px; background: #13202d; border: 1px solid var(--gold-dark); box-shadow: 0 10px 30px rgba(0, 0, 0, .5); font-size: .9rem; max-width: calc(100vw - 32px); animation: winPop .3s ease; }
 @media (min-width: 900px) { .update-banner { bottom: 24px; } }
+
+/* Admin: Stärke von Glück/Pech */
+.w-strength { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin: 6px 0; font-size: .85rem; }
+.w-strength small { flex-basis: 100%; }

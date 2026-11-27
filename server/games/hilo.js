@@ -63,12 +63,13 @@ function guess(p, body) {
   // Admin-Steuerung: feste nächste Karte (Rang 1–13) oder Glück/Pech
   const L = require('../luck');
   const forced = L.takeNext(p, 'hilo');
+  let luck = 'normal';
   const r0 = rankOf(cur);
   const fits = (r) => (dir === 'higher' ? r > r0 : r < r0);
   const card = (r) => ({ r: r === 1 ? 14 : r, s: SUITS[randInt(0, 4)] });
   if (forced) next = card(Number(forced));
-  else if (L.luckOf(p) !== 'normal') {
-    const want = L.luckOf(p) === 'win';
+  else if ((luck = L.roundLuck(p, st)) !== 'normal') {
+    const want = luck === 'win';
     const opts = [...Array(13).keys()].map((i) => i + 1).filter((r) => fits(r) === want);
     if (opts.length) next = card(opts[randInt(0, opts.length)]);
   }

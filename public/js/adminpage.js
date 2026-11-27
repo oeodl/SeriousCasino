@@ -170,6 +170,8 @@ export async function admin(root, ctx) {
           <b>${n}</b><span class="muted">${p.online ? `🟢 ${esc(p.where || '')}` : 'offline'}</span>
           <span class="gold" style="margin-left:auto">${fmt(p.balance)}</span></div>
         <div class="seg w-luck">${[['normal', 'Normal'], ['lose', '😈 Pech'], ['win', '🍀 Glück']].map(([v, l]) => `<button data-luck="${v}" data-name="${n}" class="${p.luck === v ? 'on' : ''}">${l}</button>`).join('')}</div>
+        ${p.luck !== 'normal' ? `<div class="w-strength"><span class="muted">Stärke:</span><div class="seg">${[[25, 'leicht'], [50, 'mittel'], [75, 'stark'], [100, 'immer']].map(([v, l]) => `<button data-strength="${v}" data-mode="${p.luck}" data-name="${n}" class="${p.strength === v ? 'on' : ''}" title="greift in ca. ${v} % der Runden">${l}</button>`).join('')}</div>
+          <small class="muted">${p.strength >= 100 ? (p.luck === 'win' ? 'Gewinnt praktisch jede Runde' : 'Verliert praktisch jede Runde') : `greift in ca. ${p.strength} % der Runden – sonst normaler Zufall`}</small></div>` : ''}
         ${p.rounds.map((r) => roundHtml(p.name, r)).join('')}
         <details class="w-next"><summary>Nächsten Zug vorgeben${nexts ? ` <span class="gold">(${esc(nexts)})</span>` : ''}</summary>
           <div class="row" style="flex-wrap:wrap;margin-top:6px"><span class="muted">Crash:</span><input class="input w-val" type="number" step="0.01" placeholder="1,00" style="max-width:90px"><button class="btn btn-sm" data-ctl="crash" data-action="next" data-name="${n}">nächste Runde</button></div>
@@ -202,6 +204,8 @@ export async function admin(root, ctx) {
       try {
         if (b.dataset.luck) {
           await adminApi('POST', '/api/admin/luck', { name: b.dataset.name, mode: b.dataset.luck });
+        } else if (b.dataset.strength) {
+          await adminApi('POST', '/api/admin/luck', { name: b.dataset.name, mode: b.dataset.mode, strength: Number(b.dataset.strength) });
         } else if (b.dataset.ctl) {
           const val = b.parentElement.querySelector('.w-val');
           await adminApi('POST', '/api/admin/control', {

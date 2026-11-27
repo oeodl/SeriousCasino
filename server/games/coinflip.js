@@ -50,9 +50,10 @@ function flip(p, body) {
   const L = require('../luck');
   const forced = L.takeNext(p, 'coinflip');
   const other = side === 'heads' ? 'tails' : 'heads';
+  const luck = L.luckRoll(p);
   if (forced === 'heads' || forced === 'tails') result = forced;
-  else if (L.luckOf(p) === 'win') result = side;
-  else if (L.luckOf(p) === 'lose') result = other;
+  else if (luck === 'win') result = side;
+  else if (luck === 'lose') result = other;
   st.flips.push({ side, result });
   if (result !== side) return end(p, st, false, { result });
   st.streak++;

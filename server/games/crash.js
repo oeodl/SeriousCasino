@@ -74,8 +74,11 @@ function start(p, body) {
   const L = require('../luck');
   const forced = Number(L.takeNext(p, 'crash'));
   if (forced >= 1) crash = Math.floor(forced * 100) / 100;
-  else if (L.luckOf(p) === 'lose') crash = 1 + require('../util').randInt(1, 15) / 100; // 1,01–1,14
-  else if (L.luckOf(p) === 'win') crash = Math.max(crash, auto ? auto + 0.5 : 25);
+  else {
+    const luck = L.luckRoll(p);
+    if (luck === 'lose') crash = 1 + require('../util').randInt(1, 15) / 100; // 1,01–1,14
+    else if (luck === 'win') crash = Math.max(crash, auto ? auto + 0.5 : 25);
+  }
   p.active.crash = { id: crypto.randomUUID(), bet, auto, crash, startedAt: Date.now() };
   resolve(p); // Absturz bei 1,00× sofort auswerten
   return view(p);

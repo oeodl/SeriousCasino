@@ -72,7 +72,7 @@ function pick(p, body) {
   if (!Number.isInteger(col) || col < 0 || col >= MODES[st.mode].cols) throw new GameError('Ungültiges Feld.');
   const lvl = st.picks.length;
   // Admin-Steuerung: "Pech" → Falle genau hier, "Glück" → Falle woanders hin
-  const luck = require('../luck').luckOf(p);
+  const luck = require('../luck').roundLuck(p, st);
   const { cols } = MODES[st.mode];
   if (luck === 'lose' && !st.traps[lvl].includes(col)) st.traps[lvl][0] = col;
   else if (luck === 'win' && st.traps[lvl].includes(col)) {
